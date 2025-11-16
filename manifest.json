@@ -1,0 +1,32 @@
+{
+    "manifest_version": 2,
+    "name": "YouTube LevelUp",
+    "version": "1.0.0",
+    "description": "Blocks Shorts, returns dislikes, skips sponsors, and auto-continues watching",
+    "icons": {
+        "48": "icons/icon48.png",
+        "128": "icons/icon128.png"
+    },
+    "permissions": [
+        "storage",
+        "https://returnyoutubedislikeapi.com/*",
+        "https://sponsor.ajay.app/*"
+    ],
+    "content_scripts": [
+        {
+            "matches": ["*://*.youtube.com/*"],
+            "js": ["content.js"],
+            "run_at": "document_end"
+        }
+    ],
+    "browser_specific_settings": {
+        "gecko": {
+            "id": "youtube-levelup@tn3w",
+            "strict_min_version": "58.0",
+            "data_collection_permissions": {
+                "required": ["none"],
+                "collects_data": false
+            }
+        }
+    }
+}
