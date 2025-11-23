@@ -184,7 +184,7 @@
 
         skip: () => {
             const video = document.querySelector('video');
-            if (!video || !state.current.segments.length) return;
+            if (!video || !state.current.segments.length || video.ended) return;
 
             const { currentTime, duration } = video;
 
