@@ -2,8 +2,12 @@
     'use strict';
 
     const YOUTUBE_DOMAINS = [
-        'youtube.com', 'www.youtube.com', 'm.youtube.com', 'music.youtube.com',
-        'youtube-nocookie.com', 'www.youtube-nocookie.com'
+        'youtube.com',
+        'www.youtube.com',
+        'm.youtube.com',
+        'music.youtube.com',
+        'youtube-nocookie.com',
+        'www.youtube-nocookie.com',
     ];
 
     const state = {
@@ -23,7 +27,7 @@
 
     const isYouTubeDomain = () => {
         const host = location.hostname;
-        return YOUTUBE_DOMAINS.some(d => host === d || host.endsWith('.' + d));
+        return YOUTUBE_DOMAINS.some((d) => host === d || host.endsWith('.' + d));
     };
 
     const isMobile = () => location.hostname === 'm.youtube.com';
@@ -33,12 +37,12 @@
 
     const getVideoId = () => {
         const url = new URL(location.href);
-        
+
         if (isEmbed()) {
             const match = url.pathname.match(/\/embed\/([a-zA-Z0-9_-]{11})/);
             return match?.[1] || null;
         }
-        
+
         if (url.pathname.startsWith('/clip')) {
             const meta = document.querySelector(
                 "meta[itemprop='videoId'], meta[itemprop='identifier']"

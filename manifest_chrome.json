@@ -7,10 +7,7 @@
         "48": "icons/icon48.png",
         "128": "icons/icon128.png"
     },
-    "permissions": [
-        "storage",
-        "declarativeNetRequest"
-    ],
+    "permissions": ["storage", "declarativeNetRequest"],
     "host_permissions": [
         "*://*.youtube.com/*",
         "*://*.youtube-nocookie.com/*",
@@ -29,19 +26,13 @@
     },
     "content_scripts": [
         {
-            "matches": [
-                "*://*.youtube.com/*",
-                "*://*.youtube-nocookie.com/*"
-            ],
+            "matches": ["*://*.youtube.com/*", "*://*.youtube-nocookie.com/*"],
             "js": ["adblock.js"],
             "run_at": "document_start",
             "all_frames": true
         },
         {
-            "matches": [
-                "*://*.youtube.com/*",
-                "*://*.youtube-nocookie.com/*"
-            ],
+            "matches": ["*://*.youtube.com/*", "*://*.youtube-nocookie.com/*"],
             "js": ["content.js"],
             "run_at": "document_end",
             "all_frames": true

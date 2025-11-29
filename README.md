@@ -7,6 +7,7 @@ Transform your YouTube experience with the most comprehensive upgrade extension 
 ## Features
 
 ### Ad Blocker
+
 - Blocks video ads, banner ads, and overlay ads
 - Works on all YouTube domains: youtube.com, music.youtube.com, youtube-nocookie.com, and embeds
 - Network-level blocking prevents ad requests from loading
@@ -15,21 +16,25 @@ Transform your YouTube experience with the most comprehensive upgrade extension 
 - Hides promotional content, merch shelves, and sponsored elements
 
 ### Shorts Blocker
+
 - Removes Shorts tabs from navigation
 - Hides Shorts shelves from feeds and search results
 - Works across desktop, mobile, and YouTube Music
 
-### Dislike Counter Restoration 
+### Dislike Counter Restoration
+
 - Shows real dislike counts using Return YouTube Dislike API
 - Integrates seamlessly with existing like/dislike buttons
 - Caches results locally for faster loading
 
 ### Smart Sponsor Skipping
+
 - Automatically skips sponsor segments using SponsorBlock database
 - Uses hashed video IDs for privacy protection
 - Sub-second accuracy with community-submitted timings
 
 ### Auto-Continue Watching
+
 - Bypasses "Are you still watching?" popups automatically
 - Only works when actively using the browser
 - Prevents unwanted pausing during active sessions
@@ -47,6 +52,7 @@ Transform your YouTube experience with the most comprehensive upgrade extension 
 ## Installation
 
 ### Chrome/Edge/Brave (Manifest V3)
+
 1. Download or clone this repository
 2. Rename `manifest_chrome.json` to `manifest.json` (backup the original)
 3. Go to `chrome://extensions/`
@@ -54,7 +60,8 @@ Transform your YouTube experience with the most comprehensive upgrade extension 
 5. Click "Load unpacked" and select the extension folder
 
 ### Firefox (Manifest V2)
-1. Download or clone this repository  
+
+1. Download or clone this repository
 2. Go to `about:debugging#/runtime/this-firefox`
 3. Click "Load Temporary Add-on"
 4. Select `manifest.json`
@@ -71,13 +78,16 @@ Transform your YouTube experience with the most comprehensive upgrade extension 
 ## How It Works
 
 ### Ad Blocking
+
 The extension uses a multi-layered approach:
+
 1. **Network blocking** - Blocks ad-related URLs at the network level using declarativeNetRequest (Chrome) or webRequest (Firefox)
 2. **JSON interception** - Intercepts `JSON.parse`, `fetch`, and `XMLHttpRequest` to remove ad data from API responses
 3. **DOM hiding** - CSS rules hide any ad elements that make it through
 4. **Auto-skip** - Detects and clicks skip buttons, or fast-forwards through unskippable ads
 
 ### Other Features
+
 - DOM selectors hide Shorts elements
 - Integrates with community APIs for dislikes and sponsor data
 - Monitors user activity to handle popups intelligently
