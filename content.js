@@ -1,6 +1,11 @@
 (() => {
     'use strict';
 
+    const YOUTUBE_DOMAINS = [
+        'youtube.com', 'www.youtube.com', 'm.youtube.com', 'music.youtube.com',
+        'youtube-nocookie.com', 'www.youtube-nocookie.com'
+    ];
+
     const state = {
         cache: { dislikes: {}, sponsors: {} },
         current: {
@@ -16,12 +21,24 @@
         state.cache.sponsors = JSON.parse(localStorage.sponsorblock_cache || '{}');
     } catch {}
 
+    const isYouTubeDomain = () => {
+        const host = location.hostname;
+        return YOUTUBE_DOMAINS.some(d => host === d || host.endsWith('.' + d));
+    };
+
     const isMobile = () => location.hostname === 'm.youtube.com';
     const isMusic = () => location.hostname === 'music.youtube.com';
-    const isWatchPage = () => /\/watch/.test(location.pathname);
+    const isEmbed = () => /\/embed\//.test(location.pathname);
+    const isWatchPage = () => /\/watch/.test(location.pathname) || isEmbed();
 
     const getVideoId = () => {
         const url = new URL(location.href);
+        
+        if (isEmbed()) {
+            const match = url.pathname.match(/\/embed\/([a-zA-Z0-9_-]{11})/);
+            return match?.[1] || null;
+        }
+        
         if (url.pathname.startsWith('/clip')) {
             const meta = document.querySelector(
                 "meta[itemprop='videoId'], meta[itemprop='identifier']"
@@ -315,17 +332,25 @@
         sponsors.skip();
     };
 
-    continueWatching.init();
-    shortsBlocker.init();
+    const init = () => {
+        if (!isYouTubeDomain()) return;
 
-    setInterval(update, 500);
-    setInterval(sponsors.skip, 100);
+        continueWatching.init();
+        shortsBlocker.init();
 
-    const observer = new MutationObserver(update);
-    observer.observe(document.body, {
-        childList: true,
-        subtree: true,
-    });
+        setInterval(update, 500);
+        setInterval(sponsors.skip, 100);
 
-    update();
+        const observer = new MutationObserver(update);
+        const target = document.body || document.documentElement;
+        observer.observe(target, { childList: true, subtree: true });
+
+        update();
+    };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
 })();
