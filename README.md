@@ -2,7 +2,9 @@
 
 **The Ultimate All-in-One YouTube Enhancement Extension**
 
-Transform your YouTube experience with the most comprehensive upgrade extension available. YouTube LevelUp combines four essential improvements into a single, lightweight browser extension that makes YouTube work the way it should have from the beginning.
+Transform your YouTube experience with the most comprehensive upgrade extension available. YouTube LevelUp combines five essential improvements into a single, lightweight browser extension that makes YouTube work the way it should have from the beginning.
+
+[![Mozilla Add-on Rating](https://img.shields.io/amo/rating/youtube-levelup?style=for-the-badge&logo=firefox&logoSize=auto&label=Get%20for%20Firefox%20%7C%7C%20Rating%3A&color=orange)](https://addons.mozilla.org/firefox/addon/youtube-levelup/)
 
 ## Features
 
@@ -36,7 +38,7 @@ Transform your YouTube experience with the most comprehensive upgrade extension 
 - Shows original video descriptions instead of auto-translated text
 - Works on desktop and mobile YouTube
 
-## Installation
+## Manual Installation
 
 **Chrome/Edge/Brave:**
 
