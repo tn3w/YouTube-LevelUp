@@ -7,35 +7,47 @@ Transform your YouTube experience with the most comprehensive upgrade extension 
 ## Features
 
 **Shorts Blocker**
+
 - Removes Shorts tabs from navigation
 - Hides Shorts shelves from feeds and search results
 - Works across desktop, mobile, and YouTube Music
 
-**Dislike Counter Restoration** 
+**Dislike Counter Restoration**
+
 - Shows real dislike counts using Return YouTube Dislike API
 - Integrates seamlessly with existing like/dislike buttons
 - Caches results locally for faster loading
 
 **Smart Sponsor Skipping**
+
 - Automatically skips sponsor segments using SponsorBlock database
 - Uses hashed video IDs for privacy protection
 - Sub-second accuracy with community-submitted timings
 
 **Auto-Continue Watching**
+
 - Bypasses "Are you still watching?" popups automatically
 - Only works when actively using the browser
 - Prevents unwanted pausing during active sessions
 
+**Anti-Translate**
+
+- Restores original audio tracks on dubbed videos
+- Shows original video descriptions instead of auto-translated text
+- Works on desktop and mobile YouTube
+
 ## Installation
 
 **Chrome/Edge/Brave:**
+
 1. Download or clone this repository
 2. Go to chrome://extensions/
 3. Enable Developer mode
 4. Click "Load unpacked" and select the extension folder
 
 **Firefox:**
-1. Download or clone this repository  
+
+1. Download or clone this repository
 2. Go to about:debugging#/runtime/this-firefox
 3. Click "Load Temporary Add-on"
 4. Select manifest.json
