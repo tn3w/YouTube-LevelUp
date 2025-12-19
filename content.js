@@ -185,15 +185,20 @@
 
         skip: () => {
             const video = document.querySelector('video');
-            if (!video || !state.current.segments.length || video.ended) return;
+            if (!video || !state.current.segments.length) return;
 
             const { currentTime, duration } = video;
 
             for (const segment of state.current.segments) {
                 const [start, end] = segment.segment;
                 if (currentTime >= start - 0.003 && currentTime < end) {
-                    const skipTo = duration > 1 && end >= duration - 0.5 ? duration - 0.001 : end;
-                    video.currentTime = skipTo;
+                    if (video.loop && duration > 1 && end >= duration - 1) {
+                        video.currentTime = 0;
+                    } else if (duration > 1 && end >= duration - 0.5) {
+                        video.currentTime = duration - 0.001;
+                    } else {
+                        video.currentTime = end;
+                    }
                     break;
                 }
             }

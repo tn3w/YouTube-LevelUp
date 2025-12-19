@@ -27,8 +27,14 @@
         const [start, end] = segment.segment;
         const { currentTime, duration } = video;
 
-        if (currentTime >= start - 0.003 && currentTime < end && !video.ended) {
-            video.currentTime = duration > 1 && end >= duration - 0.5 ? duration - 0.001 : end;
+        if (currentTime >= start - 0.003 && currentTime < end) {
+            if (video.loop && duration > 1 && end >= duration - 1) {
+                video.currentTime = 0;
+            } else if (duration > 1 && end >= duration - 0.5) {
+                video.currentTime = duration - 0.001;
+            } else {
+                video.currentTime = end;
+            }
         }
     };
 
