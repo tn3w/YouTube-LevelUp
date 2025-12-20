@@ -191,14 +191,18 @@
 
             for (const segment of state.current.segments) {
                 const [start, end] = segment.segment;
-                if (currentTime >= start - 0.003 && currentTime < end) {
-                    if (video.loop && duration > 1 && end >= duration - 1) {
-                        video.currentTime = 0;
-                    } else if (duration > 1 && end >= duration - 0.5) {
-                        video.currentTime = duration - 0.001;
-                    } else {
-                        video.currentTime = end;
-                    }
+                const clampedEnd = Math.min(end, duration);
+
+                let skipTo = clampedEnd;
+                if (video.loop && duration > 1 && clampedEnd >= duration - 1) {
+                    skipTo = 0;
+                } else if (duration > 1 && clampedEnd >= duration - 0.5) {
+                    skipTo = duration - 0.001;
+                }
+
+                const inSegment = currentTime >= start - 0.003 && currentTime < clampedEnd;
+                if (inSegment && currentTime !== skipTo) {
+                    video.currentTime = skipTo;
                     break;
                 }
             }
