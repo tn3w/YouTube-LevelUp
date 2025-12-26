@@ -59,7 +59,7 @@ Transform your YouTube experience with the most comprehensive upgrade extension 
 - No tracking or analytics
 - Local storage only for caches
 - Minimal API usage (Return YouTube Dislike and SponsorBlock only)
-- Open source - all 332 lines of code are auditable
+- Open source - all 537 lines of code are auditable
 - Only accesses necessary YouTube domains
 
 ## How It Works
