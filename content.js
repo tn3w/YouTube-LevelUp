@@ -491,6 +491,130 @@
         },
     };
 
+    const membersBlocker = {
+        BADGE_SELECTOR: [
+            '.badge.badge-style-type-members-only',
+            '.badge[aria-label*="Members" i]',
+            'ytd-badge-supported-renderer .badge-style-type-members-only',
+            'ytd-badge-supported-renderer .badge[aria-label*="Members" i]',
+            'p.style-scope.ytd-badge-supported-renderer',
+            'yt-badge-view-model badge-shape',
+            'yt-badge-view-model .yt-badge-shape__text',
+            '.badge-shape-wiz__text',
+            '.yt-badge-shape__text'
+        ].join(','),
+
+        MEDIA_SELECTOR: [
+            'ytd-rich-grid-media',
+            'ytd-video-renderer',
+            'ytd-compact-video-renderer',
+            'ytd-grid-video-renderer',
+            'yt-lockup-view-model',
+            'ytd-reel-item-renderer'
+        ].join(','),
+
+        MEMBERS_PATTERNS: [
+            /members\s*only/i,
+            /members\s*first/i,
+            /for\s+members/i,
+            /available\s+to\s+members/i
+        ],
+
+        isMembersBadge: (node) => {
+            if (node.closest?.('yt-badge-view-model')) {
+                const text = (node.textContent || '').trim();
+                if (membersBlocker.MEMBERS_PATTERNS.some(p => p.test(text))) return true;
+            }
+
+            const text = (node.textContent || '').trim();
+            const label = node.getAttribute?.('aria-label') || '';
+
+            if (node.classList?.contains('badge-style-type-members-only')) return true;
+            if (membersBlocker.MEMBERS_PATTERNS.some(p => p.test(label))) return true;
+            if (membersBlocker.MEMBERS_PATTERNS.some(p => p.test(text))) return true;
+
+            return false;
+        },
+
+        findWrapper: (badge) => {
+            return badge.closest('yt-lockup-view-model') ||
+                badge.closest('ytd-rich-item-renderer') ||
+                badge.closest('ytd-rich-grid-row') ||
+                badge.closest(membersBlocker.MEDIA_SELECTOR) ||
+                badge.closest('#contents > *');
+        },
+
+        hideWrapper: (wrapper) => {
+            if (!wrapper || wrapper.dataset.membersHidden) return;
+            wrapper.style.display = 'none';
+            wrapper.dataset.membersHidden = 'true';
+        },
+
+        hideMembersOnly: (scope = document) => {
+            const root = scope.nodeType === 1 || scope.shadowRoot ? scope : document;
+            const searchRoot = root.shadowRoot || root;
+            const badges = searchRoot.querySelectorAll(membersBlocker.BADGE_SELECTOR);
+
+            for (const badge of badges) {
+                if (!membersBlocker.isMembersBadge(badge)) continue;
+                membersBlocker.hideWrapper(membersBlocker.findWrapper(badge));
+            }
+        },
+
+        injectStyles: () => {
+            if (document.getElementById('members-blocker-style')) return;
+            if (!CSS?.supports?.('selector(:has(*))')) return;
+
+            const style = document.createElement('style');
+            style.id = 'members-blocker-style';
+            style.textContent = `
+                ytd-rich-grid-media:has(.badge-style-type-members-only),
+                ytd-video-renderer:has(.badge-style-type-members-only),
+                ytd-compact-video-renderer:has(.badge-style-type-members-only),
+                ytd-grid-video-renderer:has(.badge-style-type-members-only),
+                yt-lockup-view-model:has(.badge-style-type-members-only),
+                ytd-reel-item-renderer:has(.badge-style-type-members-only),
+                yt-lockup-view-model:has(yt-badge-view-model .yt-badge-shape__text) {
+                    display: none !important;
+                }
+            `;
+            document.documentElement.appendChild(style);
+        },
+
+        init: () => {
+            membersBlocker.injectStyles();
+            membersBlocker.hideMembersOnly();
+
+            const wrapperSelector = [
+                'ytd-rich-item-renderer',
+                'ytd-rich-grid-row',
+                membersBlocker.MEDIA_SELECTOR
+            ].join(',');
+
+            const observer = new MutationObserver((mutations) => {
+                for (const mutation of mutations) {
+                    if (mutation.type !== 'childList') continue;
+                    for (const node of mutation.addedNodes) {
+                        if (node.nodeType !== 1) continue;
+                        const scope = node.closest?.(wrapperSelector) || node;
+                        membersBlocker.hideMembersOnly(scope);
+                        if (node.shadowRoot) membersBlocker.hideMembersOnly(node.shadowRoot);
+                    }
+                }
+            });
+
+            observer.observe(document.body || document.documentElement, {
+                childList: true,
+                subtree: true
+            });
+
+            window.addEventListener('yt-navigate-finish', () => {
+                queueMicrotask(() => membersBlocker.hideMembersOnly());
+                setTimeout(() => membersBlocker.hideMembersOnly(), 250);
+            });
+        },
+    };
+
     const onNavigate = () => {
         state.current.videoId = null;
         dislikes.lastDisplayedCount = null;
@@ -521,6 +645,7 @@
 
     continueWatching.init();
     shortsBlocker.init();
+    membersBlocker.init();
 
     window.addEventListener('yt-navigate-finish', onNavigate, true);
     setInterval(update, 500);

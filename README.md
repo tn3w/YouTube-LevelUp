@@ -2,7 +2,7 @@
 
 **The Ultimate All-in-One YouTube Enhancement Extension**
 
-Transform your YouTube experience with the most comprehensive upgrade extension available. YouTube LevelUp combines five essential improvements into a single, lightweight browser extension that makes YouTube work the way it should have from the beginning.
+Transform your YouTube experience with the most comprehensive upgrade extension available. YouTube LevelUp combines six essential improvements into a single, lightweight browser extension that makes YouTube work the way it should have from the beginning.
 
 [![Mozilla Add-on Rating](https://img.shields.io/amo/rating/youtube-levelup?style=for-the-badge&logo=firefox&logoSize=auto&label=Get%20for%20Firefox%20%7C%7C%20Rating%3A&color=orange)](https://addons.mozilla.org/firefox/addon/youtube-levelup/)
 
@@ -13,6 +13,12 @@ Transform your YouTube experience with the most comprehensive upgrade extension 
 - Removes Shorts tabs from navigation
 - Hides Shorts shelves from feeds and search results
 - Works across desktop, mobile, and YouTube Music
+
+**Members-Only Content Blocker**
+
+- Hides members-only videos from feeds and recommendations
+- Detects both legacy and new YouTube badge layouts
+- Removes clutter from channels you're not subscribed to
 
 **Dislike Counter Restoration**
 
