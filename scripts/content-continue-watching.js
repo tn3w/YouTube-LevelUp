@@ -1,4 +1,6 @@
 (() => {
+    'use strict';
+
     const isMusic = location.hostname === 'music.youtube.com';
     const popupSelector = isMusic ? 'ytmusic-popup-container' : 'ytd-popup-container';
     const popupEventType = isMusic ? 'YTMUSIC-YOU-THERE-RENDERER' : 'YT-CONFIRM-DIALOG-RENDERER';

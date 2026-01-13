@@ -501,7 +501,7 @@
             'yt-badge-view-model badge-shape',
             'yt-badge-view-model .yt-badge-shape__text',
             '.badge-shape-wiz__text',
-            '.yt-badge-shape__text'
+            '.yt-badge-shape__text',
         ].join(','),
 
         MEDIA_SELECTOR: [
@@ -510,38 +510,40 @@
             'ytd-compact-video-renderer',
             'ytd-grid-video-renderer',
             'yt-lockup-view-model',
-            'ytd-reel-item-renderer'
+            'ytd-reel-item-renderer',
         ].join(','),
 
         MEMBERS_PATTERNS: [
             /members\s*only/i,
             /members\s*first/i,
             /for\s+members/i,
-            /available\s+to\s+members/i
+            /available\s+to\s+members/i,
         ],
 
         isMembersBadge: (node) => {
             if (node.closest?.('yt-badge-view-model')) {
                 const text = (node.textContent || '').trim();
-                if (membersBlocker.MEMBERS_PATTERNS.some(p => p.test(text))) return true;
+                if (membersBlocker.MEMBERS_PATTERNS.some((p) => p.test(text))) return true;
             }
 
             const text = (node.textContent || '').trim();
             const label = node.getAttribute?.('aria-label') || '';
 
             if (node.classList?.contains('badge-style-type-members-only')) return true;
-            if (membersBlocker.MEMBERS_PATTERNS.some(p => p.test(label))) return true;
-            if (membersBlocker.MEMBERS_PATTERNS.some(p => p.test(text))) return true;
+            if (membersBlocker.MEMBERS_PATTERNS.some((p) => p.test(label))) return true;
+            if (membersBlocker.MEMBERS_PATTERNS.some((p) => p.test(text))) return true;
 
             return false;
         },
 
         findWrapper: (badge) => {
-            return badge.closest('yt-lockup-view-model') ||
+            return (
+                badge.closest('yt-lockup-view-model') ||
                 badge.closest('ytd-rich-item-renderer') ||
                 badge.closest('ytd-rich-grid-row') ||
                 badge.closest(membersBlocker.MEDIA_SELECTOR) ||
-                badge.closest('#contents > *');
+                badge.closest('#contents > *')
+            );
         },
 
         hideWrapper: (wrapper) => {
@@ -588,7 +590,7 @@
             const wrapperSelector = [
                 'ytd-rich-item-renderer',
                 'ytd-rich-grid-row',
-                membersBlocker.MEDIA_SELECTOR
+                membersBlocker.MEDIA_SELECTOR,
             ].join(',');
 
             const observer = new MutationObserver((mutations) => {
@@ -605,7 +607,7 @@
 
             observer.observe(document.body || document.documentElement, {
                 childList: true,
-                subtree: true
+                subtree: true,
             });
 
             window.addEventListener('yt-navigate-finish', () => {
