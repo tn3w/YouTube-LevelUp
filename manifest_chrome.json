@@ -2,7 +2,7 @@
     "manifest_version": 3,
     "name": "YouTube LevelUp",
     "version": "1.2.0",
-    "description": "Blocks Shorts & members-only content, returns dislikes, skips sponsors, auto-continues",
+    "description": "Blocks Shorts & members-only, returns dislikes, skips sponsors, anti-translate, auto-continues",
     "icons": {
         "48": "icons/icon48.png",
         "128": "icons/icon128.png"
