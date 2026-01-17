@@ -44,6 +44,13 @@ Transform your YouTube experience with the most comprehensive upgrade extension 
 - Shows original video descriptions instead of auto-translated text
 - Works on desktop and mobile YouTube
 
+**Background Playback**
+
+- Keeps videos playing when tab is in background
+- Prevents automatic pausing when switching tabs or windows
+- Overrides visibility detection and audio context suspension
+- Works on both YouTube and YouTube Music
+
 ## Manual Installation
 
 **Chrome/Edge/Brave:**
@@ -65,7 +72,7 @@ Transform your YouTube experience with the most comprehensive upgrade extension 
 - No tracking or analytics
 - Local storage only for caches
 - Minimal API usage (Return YouTube Dislike and SponsorBlock only)
-- Open source - all 664 lines of code are auditable
+- Open source - all code is auditable
 - Only accesses necessary YouTube domains
 
 ## How It Works
