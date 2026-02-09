@@ -317,7 +317,18 @@
         ],
 
         cache: new Map(),
-        titleCache: {},
+        processed: new Set(),
+
+        normalize: (text) => {
+            if (!text) return '';
+            return text
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/\s+/g, ' ')
+                .replace(/[\p{Emoji}]/gu, '')
+                .trim()
+                .toLowerCase();
+        },
 
         getPlayer: () => {
             if (isMobile()) return document.querySelector('#player-container-id');
@@ -330,81 +341,60 @@
             return document.querySelector('ytd-player .html5-video-player');
         },
 
-        getTrackInfo: (track) => {
-            const defaults = { isOriginal: false, isDubbed: false, isAI: false };
-            if (!track?.id || typeof track.id !== 'string') return defaults;
-            const parts = track.id.split(';');
-            if (parts.length < 2) return defaults;
-            try {
-                const decoded = atob(parts[1]);
-                const isAI = decoded.includes('dubbed-auto');
-                return {
-                    isOriginal: decoded.includes('original'),
-                    isDubbed: decoded.includes('dubbed') || isAI,
-                    isAI,
-                };
-            } catch {
-                return defaults;
-            }
-        },
-
-        isOriginalTrack: (track, langField) => {
-            if (!track) return false;
-            if (langField && track[langField]?.name) {
-                const name = track[langField].name.toLowerCase();
-                for (const kw of antiTranslate.ORIGINAL_KEYWORDS) {
-                    if (name.includes(kw.toLowerCase())) return true;
-                }
-            }
-            return antiTranslate.getTrackInfo(track).isOriginal;
-        },
-
-        getOriginalTrack: (tracks) => {
-            if (!Array.isArray(tracks)) return null;
-            let langField = null;
-            for (const track of tracks) {
-                if (!track || typeof track !== 'object') continue;
-                for (const [key, val] of Object.entries(track)) {
-                    if (val && typeof val === 'object' && val.name) {
-                        langField = key;
-                        break;
-                    }
-                }
-                if (langField) break;
-            }
-            if (!langField) return null;
-            for (const track of tracks) {
-                if (antiTranslate.isOriginalTrack(track, langField)) return track;
-            }
-            return null;
-        },
-
         fetchTitle: async (videoId) => {
-            const cacheKey = `title_${videoId}`;
-            if (antiTranslate.cache.has(cacheKey)) {
-                return antiTranslate.cache.get(cacheKey);
+            if (antiTranslate.cache.has(videoId)) {
+                return antiTranslate.cache.get(videoId);
             }
-
-            const url = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}`;
             try {
-                const res = await fetch(url);
+                const res = await fetch(
+                    `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}`
+                );
                 if (!res.ok) return null;
                 const data = await res.json();
                 const title = data.title || null;
-                antiTranslate.cache.set(cacheKey, title);
+                if (title) antiTranslate.cache.set(videoId, title);
                 return title;
             } catch {
                 return null;
             }
         },
 
-        normalizeText: (text) => {
-            if (!text) return '';
-            return text.normalize('NFKC').replace(/\s+/g, ' ').trim().toLowerCase();
-        },
+        getOriginal: (tracks) => {
+            if (!Array.isArray(tracks)) return null;
 
-        textsEqual: (a, b) => {
-            return antiTranslate.normalizeText(a) === antiTranslate.normalizeText(b);
+            let displayField = null;
+            for (const track of tracks) {
+                if (!track || typeof track !== 'object') continue;
+                for (const [key, value] of Object.entries(track)) {
+                    if (value && typeof value === 'object' && value.name) {
+                        displayField = key;
+                        break;
+                    }
+                }
+                if (displayField) break;
+            }
+
+            const isOriginalTrack = (track) => {
+                if (!track) return false;
+
+                if (displayField && track[displayField]?.name) {
+                    const name = track[displayField].name.toLowerCase();
+                    if (antiTranslate.ORIGINAL_KEYWORDS.some((kw) => name.includes(kw))) {
+                        return true;
+                    }
+                }
+
+                if (!track.id || typeof track.id !== 'string') return false;
+                const parts = track.id.split(';');
+                if (parts.length < 2) return false;
+                try {
+                    return atob(parts[1]).includes('original');
+                } catch {
+                    return false;
+                }
+            };
+
+            return tracks.find((track) => isOriginalTrack(track));
         },
 
         untranslateAudio: async () => {
@@ -429,18 +419,14 @@
             const key = `${videoId}+${current.id}`;
             if (state.antiTranslate.audioTrack === key) return;
 
-            const original = antiTranslate.getOriginalTrack(tracks);
-            if (!original) return;
-
-            if (original.id === current.id) {
+            const original = antiTranslate.getOriginal(tracks);
+            if (!original || original.id === current.id) {
                 state.antiTranslate.audioTrack = key;
                 return;
             }
 
             const success = await player.setAudioTrack(original);
-            if (success) {
-                state.antiTranslate.audioTrack = `${videoId}+${original.id}`;
-            }
+            if (success) state.antiTranslate.audioTrack = `${videoId}+${original.id}`;
         },
 
         untranslateDescription: () => {
@@ -451,122 +437,206 @@
             const original = response?.videoDetails?.shortDescription;
             if (!original) return;
 
-            const id = getVideoId();
-            if (state.antiTranslate.videoId === id) return;
+            const videoId = getVideoId();
+            if (!videoId || state.antiTranslate.videoId === videoId) return;
 
-            const desktopSel =
-                '#description-inline-expander yt-attributed-string, ' +
-                '#description-inline-expander .yt-core-attributed-string, ' +
-                'ytd-expander#description yt-formatted-string';
-            const mobileSel =
-                '.expandable-video-description-body-main, ' +
-                '.expandable-video-description-container';
-            const container = document.querySelector(isMobile() ? mobileSel : desktopSel);
+            const parentSel = isMobile()
+                ? 'ytm-expandable-video-description-body-renderer'
+                : '#description-inline-expander';
+            const containerSel = isMobile() ? '#collapsed-string' : '#attributed-snippet-text';
+
+            const parent = document.querySelector(parentSel);
+            if (!parent) return;
+
+            const container = parent.querySelector(containerSel);
             if (!container) return;
 
-            const currentText = container.textContent?.trim();
-            const firstLine = original.split('\n')[0].trim();
-            if (currentText?.startsWith(firstLine)) {
-                state.antiTranslate.videoId = id;
+            const current = container.textContent?.trim();
+            const first = original.split('\n')[0].trim();
+            if (current?.startsWith(first)) {
+                state.antiTranslate.videoId = videoId;
                 return;
             }
 
-            container.textContent = '';
+            const span = document.createElement('span');
+            span.className =
+                'yt-core-attributed-string yt-core-attributed-string--white-space-pre-wrap';
+            span.dir = 'auto';
+
+            const inner = document.createElement('span');
+            inner.className = 'yt-core-attributed-string--link-inherit-color';
+            inner.dir = 'auto';
+
             original.split('\n').forEach((line, i, arr) => {
-                container.appendChild(document.createTextNode(line));
+                inner.appendChild(document.createTextNode(line));
                 if (i < arr.length - 1) {
-                    container.appendChild(document.createElement('br'));
+                    inner.appendChild(document.createElement('br'));
                 }
             });
-            state.antiTranslate.videoId = id;
+
+            span.appendChild(inner);
+            container.textContent = '';
+            container.appendChild(span);
+            state.antiTranslate.videoId = videoId;
         },
 
-        untranslateCurrentVideo: async () => {
+        untranslateMainTitle: async () => {
             if (!location.pathname.startsWith('/watch')) return;
 
-            const videoId = new URL(location.href).searchParams.get('v');
+            const videoId = getVideoId();
             if (!videoId) return;
 
             const selector = isMobile()
-                ? 'ytm-video-description-header-renderer .title > span.yt-core-attributed-string'
-                : '#title > h1 > yt-formatted-string, .slim-video-information-title .yt-core-attributed-string';
+                ? 'h2.slim-video-information-title span.yt-core-attributed-string'
+                : 'h1.ytd-watch-metadata > yt-formatted-string';
 
-            const titleElement = document.querySelector(selector);
-            if (!titleElement) return;
+            const element = document.querySelector(selector);
+            if (!element) return;
 
-            const currentTitle = titleElement.textContent?.trim();
-            if (!currentTitle) return;
+            const current = element.textContent?.trim();
+            if (!current) return;
 
-            const cacheKey = `${videoId}_${currentTitle}`;
-            if (antiTranslate.titleCache[cacheKey]) return;
+            const key = `${videoId}_${current}`;
+            if (antiTranslate.processed.has(key)) return;
 
-            const originalTitle = await antiTranslate.fetchTitle(videoId);
-            if (!originalTitle) return;
+            const original = await antiTranslate.fetchTitle(videoId);
+            if (!original) return;
 
-            if (antiTranslate.textsEqual(originalTitle, currentTitle)) {
-                antiTranslate.titleCache[cacheKey] = true;
+            if (antiTranslate.normalize(original) === antiTranslate.normalize(current)) {
+                antiTranslate.processed.add(key);
                 return;
             }
 
-            titleElement.textContent = originalTitle;
-            antiTranslate.titleCache[cacheKey] = true;
+            element.textContent = original;
+            element.removeAttribute('is-empty');
 
-            if (document.title.includes(currentTitle)) {
-                document.title = document.title.replace(currentTitle, originalTitle);
+            const expectedTitle = `${original} - YouTube`;
+            if (document.title !== expectedTitle) {
+                document.title = expectedTitle;
             }
+
+            antiTranslate.processed.add(key);
         },
 
         untranslateVideoList: async () => {
-            const selector = isMobile()
-                ? 'ytm-compact-video-renderer, ytm-rich-item-renderer, ytm-video-with-context-renderer'
-                : 'ytd-video-renderer, ytd-rich-item-renderer, ytd-compact-video-renderer, ytd-grid-video-renderer';
+            const sel = isMobile()
+                ? 'ytm-video-with-context-renderer, ytm-video-card-renderer'
+                : 'ytd-video-renderer, ytd-rich-item-renderer, ' +
+                  'ytd-compact-video-renderer, ytd-grid-video-renderer';
 
-            const videos = document.querySelectorAll(selector);
+            const videos = document.querySelectorAll(sel);
 
             for (const video of videos) {
-                if (video.dataset.untranslated) continue;
-
-                const linkSelector = isMobile()
-                    ? 'a.media-item-thumbnail-container, a'
-                    : 'a#video-title-link, a#thumbnail';
-                const titleSelector = isMobile()
-                    ? '.video-card-title .yt-core-attributed-string, .compact-media-item-headline .yt-core-attributed-string'
+                const titleSel = isMobile()
+                    ? 'h3.media-item-headline > span.yt-core-attributed-string, ' +
+                      'h4.video-card-title > span.yt-core-attributed-string'
                     : '#video-title';
 
-                const link = video.querySelector(linkSelector);
-                const titleElement = video.querySelector(titleSelector);
+                const titleEl = video.querySelector(titleSel);
+                if (!titleEl) continue;
 
-                if (!link || !titleElement) continue;
+                const link = titleEl.closest('a');
+                if (!link) continue;
 
                 const href = link.href;
                 if (!href || !href.includes('/watch?v=')) continue;
 
-                const videoId = new URL(href).searchParams.get('v');
-                if (!videoId) continue;
-
-                const currentTitle = titleElement.textContent?.trim();
-                if (!currentTitle) continue;
-
-                const originalTitle = await antiTranslate.fetchTitle(videoId);
-                if (!originalTitle) continue;
-
-                if (antiTranslate.textsEqual(originalTitle, currentTitle)) {
-                    video.dataset.untranslated = 'true';
+                if (href.includes('list=') && !href.includes('&index=')) {
+                    titleEl.removeAttribute('ynt');
+                    titleEl.removeAttribute('ynt-original');
+                    titleEl.removeAttribute('ynt-fail');
                     continue;
                 }
 
-                titleElement.textContent = originalTitle;
-                if (titleElement.title) titleElement.title = originalTitle;
-                if (link.title) link.title = originalTitle;
+                const videoId = new URL(href).searchParams.get('v');
+                if (!videoId) continue;
 
-                video.dataset.untranslated = 'true';
+                if (titleEl.getAttribute('ynt') === videoId) continue;
+                if (titleEl.getAttribute('ynt-original') === videoId) continue;
+
+                const current = titleEl.textContent?.trim();
+                if (!current) continue;
+
+                const original = await antiTranslate.fetchTitle(videoId);
+                if (!original) {
+                    titleEl.removeAttribute('ynt');
+                    titleEl.removeAttribute('ynt-original');
+                    titleEl.setAttribute('ynt-fail', videoId);
+                    continue;
+                }
+
+                if (antiTranslate.normalize(original) === antiTranslate.normalize(current)) {
+                    titleEl.removeAttribute('ynt');
+                    titleEl.removeAttribute('ynt-fail');
+                    titleEl.setAttribute('ynt-original', videoId);
+                    continue;
+                }
+
+                titleEl.textContent = original;
+                if (titleEl.title) titleEl.title = original;
+                if (link.title) link.title = original;
+                titleEl.removeAttribute('ynt-original');
+                titleEl.removeAttribute('ynt-fail');
+                titleEl.setAttribute('ynt', videoId);
             }
         },
 
+        matchLang: (code1, code2) => {
+            if (!code1 || !code2) return false;
+            return code1.split('-')[0] === code2.split('-')[0];
+        },
+
+        untranslateSubtitles: () => {
+            const player = antiTranslate.getPlayer();
+            if (!player || typeof player.getPlayerResponse !== 'function') return;
+
+            try {
+                const response = player.getPlayerResponse();
+                const tracks = response.captions?.playerCaptionsTracklistRenderer?.captionTracks;
+                if (!tracks) return;
+
+                const asrTrack = tracks.find((track) => track.kind === 'asr');
+                if (!asrTrack) return;
+
+                const original = tracks.find(
+                    (track) =>
+                        antiTranslate.matchLang(track.languageCode, asrTrack.languageCode) &&
+                        !track.kind
+                );
+
+                if (original && typeof player.setOption === 'function') {
+                    player.setOption('captions', 'track', original);
+                }
+            } catch {}
+        },
+
+        removeSyncLabel: () => {
+            const labels = document.querySelectorAll(
+                '.ytp-caption-window-rollup, ' +
+                    '.caption-window .ytp-caption-segment[style*="italic"]'
+            );
+            labels.forEach((label) => {
+                const text = label.textContent?.trim().toLowerCase();
+                if (
+                    text &&
+                    (text.includes('automatically') ||
+                        text.includes('synchronized') ||
+                        text.includes('auto-generated') ||
+                        text.includes('自動'))
+                ) {
+                    label.remove();
+                }
+            });
+        },
+
         update: () => {
-            antiTranslate.untranslateAudio();
-            antiTranslate.untranslateDescription();
-            antiTranslate.untranslateCurrentVideo();
+            if (location.pathname.startsWith('/watch')) {
+                antiTranslate.untranslateAudio();
+                antiTranslate.untranslateDescription();
+                antiTranslate.untranslateMainTitle();
+                antiTranslate.untranslateSubtitles();
+                antiTranslate.removeSyncLabel();
+            }
             antiTranslate.untranslateVideoList();
         },
     };

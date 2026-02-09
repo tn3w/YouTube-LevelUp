@@ -1,6 +1,21 @@
 (() => {
     'use strict';
 
+    const normalize = (text) => {
+        if (!text) return '';
+        return text
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/\s+/g, ' ')
+            .replace(/[\p{Emoji}]/gu, '')
+            .trim()
+            .toLowerCase();
+    };
+
+    const cache = new Map();
+    const processed = new Set();
+    const state = { videoId: null, audioId: null };
+
     const ORIGINAL_KEYWORDS = [
         'original',
         'оригинал',
@@ -28,9 +43,6 @@
         'ต้นฉบับ',
     ];
 
-    const cache = new Map();
-    const state = { videoId: null, audioTrack: null, titleCache: {} };
-
     const isMobile = () => location.hostname === 'm.youtube.com';
 
     const getPlayer = () => {
@@ -44,78 +56,61 @@
         return document.querySelector('ytd-player .html5-video-player');
     };
 
-    const getTrackInfo = (track) => {
-        const defaults = { isOriginal: false, isDubbed: false, isAI: false };
-        if (!track?.id || typeof track.id !== 'string') return defaults;
-        const parts = track.id.split(';');
-        if (parts.length < 2) return defaults;
-        try {
-            const decoded = atob(parts[1]);
-            const isAI = decoded.includes('dubbed-auto');
-            return {
-                isOriginal: decoded.includes('original'),
-                isDubbed: decoded.includes('dubbed') || isAI,
-                isAI,
-            };
-        } catch {
-            return defaults;
-        }
-    };
-
-    const isOriginalTrack = (track, langField) => {
-        if (!track) return false;
-        if (langField && track[langField]?.name) {
-            const name = track[langField].name.toLowerCase();
-            for (const kw of ORIGINAL_KEYWORDS) {
-                if (name.includes(kw.toLowerCase())) return true;
-            }
-        }
-        return getTrackInfo(track).isOriginal;
-    };
-
-    const getOriginalTrack = (tracks) => {
-        if (!Array.isArray(tracks)) return null;
-        let langField = null;
-        for (const track of tracks) {
-            if (!track || typeof track !== 'object') continue;
-            for (const [key, val] of Object.entries(track)) {
-                if (val && typeof val === 'object' && val.name) {
-                    langField = key;
-                    break;
-                }
-            }
-            if (langField) break;
-        }
-        if (!langField) return null;
-        for (const track of tracks) {
-            if (isOriginalTrack(track, langField)) return track;
-        }
-        return null;
-    };
+    const getVideoId = () => new URLSearchParams(location.search).get('v');
 
     const fetchTitle = async (videoId) => {
-        const cacheKey = `title_${videoId}`;
-        if (cache.has(cacheKey)) return cache.get(cacheKey);
-
-        const url = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}`;
+        if (cache.has(videoId)) return cache.get(videoId);
         try {
-            const res = await fetch(url);
-            if (!res.ok) return null;
-            const data = await res.json();
+            const response = await fetch(
+                `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}`
+            );
+            if (!response.ok) return null;
+            const data = await response.json();
             const title = data.title || null;
-            cache.set(cacheKey, title);
+            if (title) cache.set(videoId, title);
             return title;
         } catch {
             return null;
         }
     };
 
-    const normalizeText = (text) => {
-        if (!text) return '';
-        return text.normalize('NFKC').replace(/\s+/g, ' ').trim().toLowerCase();
-    };
+    const getOriginal = (tracks) => {
+        if (!Array.isArray(tracks)) return null;
 
-    const textsEqual = (a, b) => normalizeText(a) === normalizeText(b);
+        let displayField = null;
+        for (const track of tracks) {
+            if (!track || typeof track !== 'object') continue;
+            for (const [key, value] of Object.entries(track)) {
+                if (value && typeof value === 'object' && value.name) {
+                    displayField = key;
+                    break;
+                }
+            }
+            if (displayField) break;
+        }
+
+        const isOriginalTrack = (track) => {
+            if (!track) return false;
+
+            if (displayField && track[displayField]?.name) {
+                const name = track[displayField].name.toLowerCase();
+                if (ORIGINAL_KEYWORDS.some((keyword) => name.includes(keyword))) {
+                    return true;
+                }
+            }
+
+            if (!track.id || typeof track.id !== 'string') return false;
+            const parts = track.id.split(';');
+            if (parts.length < 2) return false;
+            try {
+                return atob(parts[1]).includes('original');
+            } catch {
+                return false;
+            }
+        };
+
+        return tracks.find((track) => isOriginalTrack(track));
+    };
 
     const untranslateAudio = async () => {
         const player = getPlayer();
@@ -137,20 +132,16 @@
         if (!videoId) return;
 
         const key = `${videoId}+${current.id}`;
-        if (state.audioTrack === key) return;
+        if (state.audioId === key) return;
 
-        const original = getOriginalTrack(tracks);
-        if (!original) return;
-
-        if (original.id === current.id) {
-            state.audioTrack = key;
+        const original = getOriginal(tracks);
+        if (!original || original.id === current.id) {
+            state.audioId = key;
             return;
         }
 
         const success = await player.setAudioTrack(original);
-        if (success) {
-            state.audioTrack = `${videoId}+${original.id}`;
-        }
+        if (success) state.audioId = `${videoId}+${original.id}`;
     };
 
     const untranslateDescription = () => {
@@ -161,128 +152,208 @@
         const original = response?.videoDetails?.shortDescription;
         if (!original) return;
 
-        const videoId = new URL(location.href).searchParams.get('v');
-        if (state.videoId === videoId) return;
+        const videoId = getVideoId();
+        if (!videoId || state.videoId === videoId) return;
 
-        const desktopSel =
-            '#description-inline-expander yt-attributed-string, ' +
-            '#description-inline-expander .yt-core-attributed-string, ' +
-            'ytd-expander#description yt-formatted-string';
-        const mobileSel =
-            '.expandable-video-description-body-main, ' + '.expandable-video-description-container';
-        const container = document.querySelector(isMobile() ? mobileSel : desktopSel);
+        const parentSel = isMobile()
+            ? 'ytm-expandable-video-description-body-renderer'
+            : '#description-inline-expander';
+        const containerSel = isMobile() ? '#collapsed-string' : '#attributed-snippet-text';
+
+        const parent = document.querySelector(parentSel);
+        if (!parent) return;
+
+        const container = parent.querySelector(containerSel);
         if (!container) return;
 
-        const currentText = container.textContent?.trim();
-        const firstLine = original.split('\n')[0].trim();
-        if (currentText?.startsWith(firstLine)) {
+        const current = container.textContent?.trim();
+        const first = original.split('\n')[0].trim();
+        if (current?.startsWith(first)) {
             state.videoId = videoId;
             return;
         }
 
-        container.textContent = '';
+        const span = document.createElement('span');
+        span.className =
+            'yt-core-attributed-string yt-core-attributed-string--white-space-pre-wrap';
+        span.dir = 'auto';
+
+        const inner = document.createElement('span');
+        inner.className = 'yt-core-attributed-string--link-inherit-color';
+        inner.dir = 'auto';
+
         original.split('\n').forEach((line, i, arr) => {
-            container.appendChild(document.createTextNode(line));
+            inner.appendChild(document.createTextNode(line));
             if (i < arr.length - 1) {
-                container.appendChild(document.createElement('br'));
+                inner.appendChild(document.createElement('br'));
             }
         });
+
+        span.appendChild(inner);
+        container.textContent = '';
+        container.appendChild(span);
         state.videoId = videoId;
     };
 
-    const untranslateCurrentVideo = async () => {
+    const untranslateMainTitle = async () => {
         if (!location.pathname.startsWith('/watch')) return;
 
-        const videoId = new URL(location.href).searchParams.get('v');
+        const videoId = getVideoId();
         if (!videoId) return;
 
         const selector = isMobile()
-            ? 'ytm-video-description-header-renderer .title > span.yt-core-attributed-string'
-            : '#title > h1 > yt-formatted-string, .slim-video-information-title .yt-core-attributed-string';
+            ? 'h2.slim-video-information-title span.yt-core-attributed-string'
+            : 'h1.ytd-watch-metadata > yt-formatted-string';
 
-        const titleElement = document.querySelector(selector);
-        if (!titleElement) return;
+        const element = document.querySelector(selector);
+        if (!element) return;
 
-        const currentTitle = titleElement.textContent?.trim();
-        if (!currentTitle) return;
+        const current = element.textContent?.trim();
+        if (!current) return;
 
-        const cacheKey = `${videoId}_${currentTitle}`;
-        if (state.titleCache[cacheKey]) return;
+        const key = `${videoId}_${current}`;
+        if (processed.has(key)) return;
 
-        const originalTitle = await fetchTitle(videoId);
-        if (!originalTitle) return;
+        const original = await fetchTitle(videoId);
+        if (!original) return;
 
-        if (textsEqual(originalTitle, currentTitle)) {
-            state.titleCache[cacheKey] = true;
+        if (normalize(original) === normalize(current)) {
+            processed.add(key);
             return;
         }
 
-        titleElement.textContent = originalTitle;
-        state.titleCache[cacheKey] = true;
+        element.textContent = original;
+        element.removeAttribute('is-empty');
 
-        if (document.title.includes(currentTitle)) {
-            document.title = document.title.replace(currentTitle, originalTitle);
+        const expectedTitle = `${original} - YouTube`;
+        if (document.title !== expectedTitle) {
+            document.title = expectedTitle;
         }
+
+        processed.add(key);
     };
 
     const untranslateVideoList = async () => {
-        const selector = isMobile()
-            ? 'ytm-compact-video-renderer, ytm-rich-item-renderer, ytm-video-with-context-renderer'
-            : 'ytd-video-renderer, ytd-rich-item-renderer, ytd-compact-video-renderer, ytd-grid-video-renderer';
+        const sel = isMobile()
+            ? 'ytm-video-with-context-renderer, ytm-video-card-renderer'
+            : 'ytd-video-renderer, ytd-rich-item-renderer, ' +
+              'ytd-compact-video-renderer, ytd-grid-video-renderer';
 
-        const videos = document.querySelectorAll(selector);
+        const videos = document.querySelectorAll(sel);
 
         for (const video of videos) {
-            if (video.dataset.untranslated) continue;
-
-            const linkSelector = isMobile()
-                ? 'a.media-item-thumbnail-container, a'
-                : 'a#video-title-link, a#thumbnail';
-            const titleSelector = isMobile()
-                ? '.video-card-title .yt-core-attributed-string, .compact-media-item-headline .yt-core-attributed-string'
+            const titleSel = isMobile()
+                ? 'h3.media-item-headline > span.yt-core-attributed-string, ' +
+                  'h4.video-card-title > span.yt-core-attributed-string'
                 : '#video-title';
 
-            const link = video.querySelector(linkSelector);
-            const titleElement = video.querySelector(titleSelector);
+            const titleEl = video.querySelector(titleSel);
+            if (!titleEl) continue;
 
-            if (!link || !titleElement) continue;
+            const link = titleEl.closest('a');
+            if (!link) continue;
 
             const href = link.href;
             if (!href || !href.includes('/watch?v=')) continue;
 
-            const videoId = new URL(href).searchParams.get('v');
-            if (!videoId) continue;
-
-            const currentTitle = titleElement.textContent?.trim();
-            if (!currentTitle) continue;
-
-            const originalTitle = await fetchTitle(videoId);
-            if (!originalTitle) continue;
-
-            if (textsEqual(originalTitle, currentTitle)) {
-                video.dataset.untranslated = 'true';
+            if (href.includes('list=') && !href.includes('&index=')) {
+                titleEl.removeAttribute('ynt');
+                titleEl.removeAttribute('ynt-original');
+                titleEl.removeAttribute('ynt-fail');
                 continue;
             }
 
-            titleElement.textContent = originalTitle;
-            if (titleElement.title) titleElement.title = originalTitle;
-            if (link.title) link.title = originalTitle;
+            const videoId = new URL(href).searchParams.get('v');
+            if (!videoId) continue;
 
-            video.dataset.untranslated = 'true';
+            if (titleEl.getAttribute('ynt') === videoId) continue;
+            if (titleEl.getAttribute('ynt-original') === videoId) continue;
+
+            const current = titleEl.textContent?.trim();
+            if (!current) continue;
+
+            const original = await fetchTitle(videoId);
+            if (!original) {
+                titleEl.removeAttribute('ynt');
+                titleEl.removeAttribute('ynt-original');
+                titleEl.setAttribute('ynt-fail', videoId);
+                continue;
+            }
+
+            if (normalize(original) === normalize(current)) {
+                titleEl.removeAttribute('ynt');
+                titleEl.removeAttribute('ynt-fail');
+                titleEl.setAttribute('ynt-original', videoId);
+                continue;
+            }
+
+            titleEl.textContent = original;
+            if (titleEl.title) titleEl.title = original;
+            if (link.title) link.title = original;
+            titleEl.removeAttribute('ynt-original');
+            titleEl.removeAttribute('ynt-fail');
+            titleEl.setAttribute('ynt', videoId);
         }
+    };
+
+    const matchLang = (code1, code2) => {
+        if (!code1 || !code2) return false;
+        return code1.split('-')[0] === code2.split('-')[0];
+    };
+
+    const untranslateSubtitles = () => {
+        const player = getPlayer();
+        if (!player || typeof player.getPlayerResponse !== 'function') return;
+
+        try {
+            const response = player.getPlayerResponse();
+            const tracks = response.captions?.playerCaptionsTracklistRenderer?.captionTracks;
+            if (!tracks) return;
+
+            const asrTrack = tracks.find((track) => track.kind === 'asr');
+            if (!asrTrack) return;
+
+            const original = tracks.find(
+                (track) => matchLang(track.languageCode, asrTrack.languageCode) && !track.kind
+            );
+
+            if (original && typeof player.setOption === 'function') {
+                player.setOption('captions', 'track', original);
+            }
+        } catch {}
+    };
+
+    const removeSyncLabel = () => {
+        const labels = document.querySelectorAll(
+            '.ytp-caption-window-rollup, ' + '.caption-window .ytp-caption-segment[style*="italic"]'
+        );
+        labels.forEach((label) => {
+            const text = label.textContent?.trim().toLowerCase();
+            if (
+                text &&
+                (text.includes('automatically') ||
+                    text.includes('synchronized') ||
+                    text.includes('auto-generated') ||
+                    text.includes('自動'))
+            ) {
+                label.remove();
+            }
+        });
     };
 
     const update = () => {
         if (location.pathname.startsWith('/watch')) {
             untranslateAudio();
             untranslateDescription();
-            untranslateCurrentVideo();
+            untranslateMainTitle();
+            untranslateSubtitles();
+            removeSyncLabel();
         }
         untranslateVideoList();
     };
 
     const observer = new MutationObserver(update);
     observer.observe(document.body, { childList: true, subtree: true });
-    setInterval(update, 1000);
+    setInterval(update, 1500);
     update();
 })();
