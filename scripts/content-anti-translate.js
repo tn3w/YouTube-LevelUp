@@ -28,7 +28,8 @@
         'ต้นฉบับ',
     ];
 
-    const state = { videoId: null, audioTrack: null };
+    const cache = new Map();
+    const state = { videoId: null, audioTrack: null, titleCache: {} };
 
     const isMobile = () => location.hostname === 'm.youtube.com';
 
@@ -44,15 +45,17 @@
     };
 
     const getTrackInfo = (track) => {
-        const defaults = { isOriginal: false, isDubbed: false };
+        const defaults = { isOriginal: false, isDubbed: false, isAI: false };
         if (!track?.id || typeof track.id !== 'string') return defaults;
         const parts = track.id.split(';');
         if (parts.length < 2) return defaults;
         try {
             const decoded = atob(parts[1]);
+            const isAI = decoded.includes('dubbed-auto');
             return {
                 isOriginal: decoded.includes('original'),
-                isDubbed: decoded.includes('dubbed'),
+                isDubbed: decoded.includes('dubbed') || isAI,
+                isAI,
             };
         } catch {
             return defaults;
@@ -89,6 +92,30 @@
         }
         return null;
     };
+
+    const fetchTitle = async (videoId) => {
+        const cacheKey = `title_${videoId}`;
+        if (cache.has(cacheKey)) return cache.get(cacheKey);
+
+        const url = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}`;
+        try {
+            const res = await fetch(url);
+            if (!res.ok) return null;
+            const data = await res.json();
+            const title = data.title || null;
+            cache.set(cacheKey, title);
+            return title;
+        } catch {
+            return null;
+        }
+    };
+
+    const normalizeText = (text) => {
+        if (!text) return '';
+        return text.normalize('NFKC').replace(/\s+/g, ' ').trim().toLowerCase();
+    };
+
+    const textsEqual = (a, b) => normalizeText(a) === normalizeText(b);
 
     const untranslateAudio = async () => {
         const player = getPlayer();
@@ -156,15 +183,102 @@
         container.textContent = '';
         original.split('\n').forEach((line, i, arr) => {
             container.appendChild(document.createTextNode(line));
-            if (i < arr.length - 1) container.appendChild(document.createElement('br'));
+            if (i < arr.length - 1) {
+                container.appendChild(document.createElement('br'));
+            }
         });
         state.videoId = videoId;
     };
 
+    const untranslateCurrentVideo = async () => {
+        if (!location.pathname.startsWith('/watch')) return;
+
+        const videoId = new URL(location.href).searchParams.get('v');
+        if (!videoId) return;
+
+        const selector = isMobile()
+            ? 'ytm-video-description-header-renderer .title > span.yt-core-attributed-string'
+            : '#title > h1 > yt-formatted-string, .slim-video-information-title .yt-core-attributed-string';
+
+        const titleElement = document.querySelector(selector);
+        if (!titleElement) return;
+
+        const currentTitle = titleElement.textContent?.trim();
+        if (!currentTitle) return;
+
+        const cacheKey = `${videoId}_${currentTitle}`;
+        if (state.titleCache[cacheKey]) return;
+
+        const originalTitle = await fetchTitle(videoId);
+        if (!originalTitle) return;
+
+        if (textsEqual(originalTitle, currentTitle)) {
+            state.titleCache[cacheKey] = true;
+            return;
+        }
+
+        titleElement.textContent = originalTitle;
+        state.titleCache[cacheKey] = true;
+
+        if (document.title.includes(currentTitle)) {
+            document.title = document.title.replace(currentTitle, originalTitle);
+        }
+    };
+
+    const untranslateVideoList = async () => {
+        const selector = isMobile()
+            ? 'ytm-compact-video-renderer, ytm-rich-item-renderer, ytm-video-with-context-renderer'
+            : 'ytd-video-renderer, ytd-rich-item-renderer, ytd-compact-video-renderer, ytd-grid-video-renderer';
+
+        const videos = document.querySelectorAll(selector);
+
+        for (const video of videos) {
+            if (video.dataset.untranslated) continue;
+
+            const linkSelector = isMobile()
+                ? 'a.media-item-thumbnail-container, a'
+                : 'a#video-title-link, a#thumbnail';
+            const titleSelector = isMobile()
+                ? '.video-card-title .yt-core-attributed-string, .compact-media-item-headline .yt-core-attributed-string'
+                : '#video-title';
+
+            const link = video.querySelector(linkSelector);
+            const titleElement = video.querySelector(titleSelector);
+
+            if (!link || !titleElement) continue;
+
+            const href = link.href;
+            if (!href || !href.includes('/watch?v=')) continue;
+
+            const videoId = new URL(href).searchParams.get('v');
+            if (!videoId) continue;
+
+            const currentTitle = titleElement.textContent?.trim();
+            if (!currentTitle) continue;
+
+            const originalTitle = await fetchTitle(videoId);
+            if (!originalTitle) continue;
+
+            if (textsEqual(originalTitle, currentTitle)) {
+                video.dataset.untranslated = 'true';
+                continue;
+            }
+
+            titleElement.textContent = originalTitle;
+            if (titleElement.title) titleElement.title = originalTitle;
+            if (link.title) link.title = originalTitle;
+
+            video.dataset.untranslated = 'true';
+        }
+    };
+
     const update = () => {
-        if (!/\/watch/.test(location.pathname)) return;
-        untranslateAudio();
-        untranslateDescription();
+        if (location.pathname.startsWith('/watch')) {
+            untranslateAudio();
+            untranslateDescription();
+            untranslateCurrentVideo();
+        }
+        untranslateVideoList();
     };
 
     const observer = new MutationObserver(update);

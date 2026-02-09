@@ -388,8 +388,14 @@
             'ต้นฉบับ',
         ],
 
+        cache: new Map(),
+        titleCache: {},
+
         getPlayer: () => {
             if (isMobile()) return document.querySelector('#player-container-id');
+            if (location.pathname.startsWith('/shorts')) {
+                return document.querySelector('#shorts-player');
+            }
             if (location.pathname.startsWith('/embed')) {
                 return document.querySelector('#movie_player');
             }
@@ -397,15 +403,17 @@
         },
 
         getTrackInfo: (track) => {
-            const defaults = { isOriginal: false, isDubbed: false };
+            const defaults = { isOriginal: false, isDubbed: false, isAI: false };
             if (!track?.id || typeof track.id !== 'string') return defaults;
             const parts = track.id.split(';');
             if (parts.length < 2) return defaults;
             try {
                 const decoded = atob(parts[1]);
+                const isAI = decoded.includes('dubbed-auto');
                 return {
                     isOriginal: decoded.includes('original'),
-                    isDubbed: decoded.includes('dubbed'),
+                    isDubbed: decoded.includes('dubbed') || isAI,
+                    isAI,
                 };
             } catch {
                 return defaults;
@@ -441,6 +449,34 @@
                 if (antiTranslate.isOriginalTrack(track, langField)) return track;
             }
             return null;
+        },
+
+        fetchTitle: async (videoId) => {
+            const cacheKey = `title_${videoId}`;
+            if (antiTranslate.cache.has(cacheKey)) {
+                return antiTranslate.cache.get(cacheKey);
+            }
+
+            const url = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}`;
+            try {
+                const res = await fetch(url);
+                if (!res.ok) return null;
+                const data = await res.json();
+                const title = data.title || null;
+                antiTranslate.cache.set(cacheKey, title);
+                return title;
+            } catch {
+                return null;
+            }
+        },
+
+        normalizeText: (text) => {
+            if (!text) return '';
+            return text.normalize('NFKC').replace(/\s+/g, ' ').trim().toLowerCase();
+        },
+
+        textsEqual: (a, b) => {
+            return antiTranslate.normalizeText(a) === antiTranslate.normalizeText(b);
         },
 
         untranslateAudio: async () => {
@@ -510,14 +546,100 @@
             container.textContent = '';
             original.split('\n').forEach((line, i, arr) => {
                 container.appendChild(document.createTextNode(line));
-                if (i < arr.length - 1) container.appendChild(document.createElement('br'));
+                if (i < arr.length - 1) {
+                    container.appendChild(document.createElement('br'));
+                }
             });
             state.antiTranslate.videoId = id;
+        },
+
+        untranslateCurrentVideo: async () => {
+            if (!location.pathname.startsWith('/watch')) return;
+
+            const videoId = new URL(location.href).searchParams.get('v');
+            if (!videoId) return;
+
+            const selector = isMobile()
+                ? 'ytm-video-description-header-renderer .title > span.yt-core-attributed-string'
+                : '#title > h1 > yt-formatted-string, .slim-video-information-title .yt-core-attributed-string';
+
+            const titleElement = document.querySelector(selector);
+            if (!titleElement) return;
+
+            const currentTitle = titleElement.textContent?.trim();
+            if (!currentTitle) return;
+
+            const cacheKey = `${videoId}_${currentTitle}`;
+            if (antiTranslate.titleCache[cacheKey]) return;
+
+            const originalTitle = await antiTranslate.fetchTitle(videoId);
+            if (!originalTitle) return;
+
+            if (antiTranslate.textsEqual(originalTitle, currentTitle)) {
+                antiTranslate.titleCache[cacheKey] = true;
+                return;
+            }
+
+            titleElement.textContent = originalTitle;
+            antiTranslate.titleCache[cacheKey] = true;
+
+            if (document.title.includes(currentTitle)) {
+                document.title = document.title.replace(currentTitle, originalTitle);
+            }
+        },
+
+        untranslateVideoList: async () => {
+            const selector = isMobile()
+                ? 'ytm-compact-video-renderer, ytm-rich-item-renderer, ytm-video-with-context-renderer'
+                : 'ytd-video-renderer, ytd-rich-item-renderer, ytd-compact-video-renderer, ytd-grid-video-renderer';
+
+            const videos = document.querySelectorAll(selector);
+
+            for (const video of videos) {
+                if (video.dataset.untranslated) continue;
+
+                const linkSelector = isMobile()
+                    ? 'a.media-item-thumbnail-container, a'
+                    : 'a#video-title-link, a#thumbnail';
+                const titleSelector = isMobile()
+                    ? '.video-card-title .yt-core-attributed-string, .compact-media-item-headline .yt-core-attributed-string'
+                    : '#video-title';
+
+                const link = video.querySelector(linkSelector);
+                const titleElement = video.querySelector(titleSelector);
+
+                if (!link || !titleElement) continue;
+
+                const href = link.href;
+                if (!href || !href.includes('/watch?v=')) continue;
+
+                const videoId = new URL(href).searchParams.get('v');
+                if (!videoId) continue;
+
+                const currentTitle = titleElement.textContent?.trim();
+                if (!currentTitle) continue;
+
+                const originalTitle = await antiTranslate.fetchTitle(videoId);
+                if (!originalTitle) continue;
+
+                if (antiTranslate.textsEqual(originalTitle, currentTitle)) {
+                    video.dataset.untranslated = 'true';
+                    continue;
+                }
+
+                titleElement.textContent = originalTitle;
+                if (titleElement.title) titleElement.title = originalTitle;
+                if (link.title) link.title = originalTitle;
+
+                video.dataset.untranslated = 'true';
+            }
         },
 
         update: () => {
             antiTranslate.untranslateAudio();
             antiTranslate.untranslateDescription();
+            antiTranslate.untranslateCurrentVideo();
+            antiTranslate.untranslateVideoList();
         },
     };
 

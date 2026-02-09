@@ -2,12 +2,7 @@
     'use strict';
 
     const preventBackgroundPause = () => {
-        const visibilityEvents = [
-            'visibilitychange',
-            'webkitvisibilitychange',
-            'blur',
-            'pagehide',
-        ];
+        const visibilityEvents = ['visibilitychange', 'webkitvisibilitychange', 'blur', 'pagehide'];
 
         for (const eventName of visibilityEvents) {
             window.addEventListener(
@@ -21,41 +16,25 @@
     };
 
     const overrideVisibilityProperties = () => {
-        Object.defineProperty(
-            document,
-            'hidden',
-            {
-                get: () => false,
-                configurable: true,
-            }
-        );
+        Object.defineProperty(document, 'hidden', {
+            get: () => false,
+            configurable: true,
+        });
 
-        Object.defineProperty(
-            document,
-            'webkitHidden',
-            {
-                get: () => false,
-                configurable: true,
-            }
-        );
+        Object.defineProperty(document, 'webkitHidden', {
+            get: () => false,
+            configurable: true,
+        });
 
-        Object.defineProperty(
-            document,
-            'visibilityState',
-            {
-                get: () => 'visible',
-                configurable: true,
-            }
-        );
+        Object.defineProperty(document, 'visibilityState', {
+            get: () => 'visible',
+            configurable: true,
+        });
 
-        Object.defineProperty(
-            document,
-            'webkitVisibilityState',
-            {
-                get: () => 'visible',
-                configurable: true,
-            }
-        );
+        Object.defineProperty(document, 'webkitVisibilityState', {
+            get: () => 'visible',
+            configurable: true,
+        });
     };
 
     const preventAudioContextSuspension = () => {
