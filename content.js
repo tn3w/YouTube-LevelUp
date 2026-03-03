@@ -6,7 +6,7 @@
         current: {
             videoId: null,
             segments: [],
-            processing: { dislikes: false, sponsors: false },
+            processing: { dislikes: false },
         },
         lastActivity: Date.now(),
         antiTranslate: { videoId: null, audioTrack: null },
@@ -14,7 +14,12 @@
 
     try {
         state.cache.dislikes = JSON.parse(localStorage.ytdb_cache || '{}');
-        state.cache.sponsors = JSON.parse(localStorage.sponsorblock_cache || '{}');
+        const stored = JSON.parse(localStorage.sponsorblock_cache || '{}');
+        state.cache.sponsors = Object.fromEntries(
+            Object.entries(stored).filter(
+                ([_, v]) => v.timestamp && Date.now() - v.timestamp < 3600000
+            )
+        );
     } catch {}
 
     const isMobile = () => location.hostname === 'm.youtube.com';
@@ -163,84 +168,173 @@
     };
 
     const sponsors = {
+        SKIP_BUFFER: 0.003,
+        END_TIME_SKIP_BUFFER: 0.5,
+        CACHE_TTL: 3600000,
+        pendingList: {},
+        lastSkipTime: 0,
+        skippedSegments: new Set(),
+        renderTimeout: null,
+
         hashVideoId: async (id) => {
-            const encoder = new TextEncoder();
-            const data = encoder.encode(id);
-            const buffer = await crypto.subtle.digest('SHA-256', data);
-            const bytes = Array.from(new Uint8Array(buffer));
-            return bytes
+            const buffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(id));
+            return Array.from(new Uint8Array(buffer))
                 .map((b) => b.toString(16).padStart(2, '0'))
                 .join('')
                 .slice(0, 4);
         },
 
         fetch: async (id) => {
-            if (state.current.processing.sponsors || !id || state.cache.sponsors[id]) {
-                return;
+            if (sponsors.pendingList[id]) return await sponsors.pendingList[id];
+            if (!id) return;
+
+            const cached = state.cache.sponsors[id];
+            if (cached && Date.now() - cached.timestamp < sponsors.CACHE_TTL) {
+                return cached.segments;
             }
 
-            state.current.processing.sponsors = true;
+            const pendingData = (async () => {
+                try {
+                    const hash = await sponsors.hashVideoId(id);
+                    const url =
+                        'https://sponsor.ajay.app/api/skipSegments/' +
+                        `${hash}?categories=["sponsor","selfpromo"]&actionTypes=["skip"]`;
+                    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
 
+                    if (res.ok) {
+                        const data = await res.json();
+                        const videoData = data.find((v) => v.videoID === id);
+                        const filtered =
+                            videoData?.segments
+                                ?.filter(
+                                    (s) =>
+                                        (s.category === 'sponsor' || s.category === 'selfpromo') &&
+                                        s.actionType === 'skip' &&
+                                        s.segment?.length === 2 &&
+                                        s.segment[1] > s.segment[0]
+                                )
+                                .sort((a, b) => a.segment[0] - b.segment[0]) || [];
+
+                        state.cache.sponsors[id] = { segments: filtered, timestamp: Date.now() };
+                        localStorage.sponsorblock_cache = JSON.stringify(state.cache.sponsors);
+                        return filtered;
+                    }
+                } catch {}
+                return [];
+            })();
+
+            sponsors.pendingList[id] = pendingData;
             try {
-                const hash = await sponsors.hashVideoId(id);
-                const url =
-                    'https://sponsor.ajay.app/api/skipSegments/' +
-                    hash +
-                    '?categories=["sponsor","selfpromo"]' +
-                    '&actionTypes=["skip"]';
+                return await pendingData;
+            } finally {
+                delete sponsors.pendingList[id];
+            }
+        },
 
-                const res = await fetch(url, {
-                    signal: AbortSignal.timeout(5000),
-                });
-
-                if (res.ok) {
-                    const data = await res.json();
-                    const video = data.find((v) => v.videoID === id);
-                    const filtered =
-                        video?.segments?.filter(
-                            (s) =>
-                                (s.category === 'sponsor' || s.category === 'selfpromo') &&
-                                s.actionType === 'skip'
-                        ) || [];
-
-                    state.cache.sponsors[id] = filtered;
-                    localStorage.sponsorblock_cache = JSON.stringify(state.cache.sponsors);
-                    state.current.segments = filtered;
-                }
-            } catch {}
-
-            state.current.processing.sponsors = false;
+        getVideo: () => {
+            const videos = [...document.querySelectorAll('video')].filter(
+                (v) => v.offsetWidth > 0 && v.offsetHeight > 0
+            );
+            return videos[0];
         },
 
         skip: () => {
-            const video = document.querySelector('video');
+            const video = sponsors.getVideo();
             if (!video || !state.current.segments.length) return;
 
             const { currentTime, duration } = video;
 
             for (const segment of state.current.segments) {
                 const [start, end] = segment.segment;
-                const clampedEnd = Math.min(end, duration);
 
+                if (currentTime < start - sponsors.SKIP_BUFFER || currentTime >= end) continue;
+                if (Date.now() - sponsors.lastSkipTime < 500) continue;
+
+                const clampedEnd = Math.min(end, duration);
                 let skipTo = clampedEnd;
+
                 if (video.loop && duration > 1 && clampedEnd >= duration - 1) {
                     skipTo = 0;
-                } else if (duration > 1 && clampedEnd >= duration - 0.5) {
+                } else if (
+                    duration > 1 &&
+                    Math.abs(clampedEnd - duration) < sponsors.END_TIME_SKIP_BUFFER
+                ) {
                     skipTo = duration - 0.001;
                 }
 
-                const inSegment = currentTime >= start - 0.003 && currentTime < clampedEnd;
-                if (inSegment && currentTime !== skipTo) {
+                if (currentTime !== skipTo) {
                     video.currentTime = skipTo;
+                    sponsors.lastSkipTime = Date.now();
+                    sponsors.skippedSegments.add(segment.UUID);
                     break;
                 }
             }
         },
 
+        getProgressBar: () => {
+            const bars = document.querySelectorAll('.ytp-progress-bar');
+            return [...bars].find((bar) => bar.offsetWidth > 0) || bars[0];
+        },
+
+        timeToPercentage: (time, duration, progressBar) => {
+            const chapters = progressBar?.parentElement?.querySelector('.ytp-chapters-container');
+            if (!chapters || chapters.children.length <= 1) {
+                return (time / duration) * 100;
+            }
+            return (time / duration) * 100;
+        },
+
+        renderMarkers: () => {
+            const progressBar = sponsors.getProgressBar();
+            if (!progressBar) return;
+
+            const video = sponsors.getVideo();
+            if (!video?.duration) return;
+
+            document.querySelectorAll('.skip-segment-marker').forEach((m) => m.remove());
+
+            const duration = video.duration;
+            state.current.segments.forEach((segment) => {
+                const [startTime, endTime] = segment.segment;
+                if (endTime <= startTime) return;
+
+                const marker = document.createElement('div');
+                marker.className = 'skip-segment-marker';
+                const leftPos = sponsors.timeToPercentage(startTime, duration, progressBar);
+                const rightPos = sponsors.timeToPercentage(endTime, duration, progressBar);
+                marker.style.cssText = `
+                    position: absolute;
+                    left: ${leftPos}%;
+                    width: ${rightPos - leftPos}%;
+                    top: 0;
+                    height: 100%;
+                    background: rgba(0, 255, 0, 0.6);
+                    z-index: 10;
+                    pointer-events: none;
+                `;
+                progressBar.appendChild(marker);
+            });
+        },
+
+        scheduleRender: () => {
+            clearTimeout(sponsors.renderTimeout);
+            sponsors.renderTimeout = setTimeout(sponsors.renderMarkers, 100);
+        },
+
         update: (id) => {
-            state.current.segments = state.cache.sponsors[id] || [];
-            if (!state.cache.sponsors[id]) {
-                sponsors.fetch(id);
+            sponsors.skippedSegments.clear();
+
+            const cached = state.cache.sponsors[id];
+            state.current.segments =
+                cached && Date.now() - cached.timestamp < sponsors.CACHE_TTL ? cached.segments : [];
+
+            if (!cached || Date.now() - cached.timestamp >= sponsors.CACHE_TTL) {
+                sponsors.fetch(id).then((segs) => {
+                    state.current.segments = segs || [];
+                    sponsors.renderMarkers();
+                });
+            } else {
+                sponsors.scheduleRender();
             }
         },
     };
@@ -812,12 +906,16 @@
     const onNavigate = () => {
         state.current.videoId = null;
         dislikes.lastDisplayedCount = null;
+        sponsors.skippedSegments.clear();
+        document.querySelectorAll('.skip-segment-marker').forEach((m) => m.remove());
         setTimeout(update, 100);
     };
 
     const update = () => {
         if (!isWatchPage()) {
             state.current.segments = [];
+            sponsors.skippedSegments.clear();
+            document.querySelectorAll('.skip-segment-marker').forEach((m) => m.remove());
             return;
         }
 
@@ -845,7 +943,10 @@
     setInterval(update, 500);
     setInterval(sponsors.skip, 100);
 
-    const observer = new MutationObserver(update);
+    const observer = new MutationObserver(() => {
+        update();
+        sponsors.scheduleRender();
+    });
     observer.observe(document.body, {
         childList: true,
         subtree: true,
