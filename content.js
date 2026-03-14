@@ -1095,9 +1095,7 @@
 
         injectStyles: () => {
             if (!isMobile()) return;
-            if (document.getElementById(
-                mobileMetadataFix.STYLE_ID
-            )) return;
+            if (document.getElementById(mobileMetadataFix.STYLE_ID)) return;
 
             const style = document.createElement('style');
             style.id = mobileMetadataFix.STYLE_ID;

@@ -3,8 +3,7 @@
 
     const STYLE_ID = 'mobile-metadata-fix-style';
 
-    const isMobile = () =>
-        location.hostname === 'm.youtube.com';
+    const isMobile = () => location.hostname === 'm.youtube.com';
 
     const injectStyles = () => {
         if (!isMobile()) return;
