@@ -1,11 +1,7 @@
-'use strict';
-
 (() => {
+    'use strict';
+
     const originalHiddenDesc = Object.getOwnPropertyDescriptor(Document.prototype, 'hidden');
-    const originalVisibilityDesc = Object.getOwnPropertyDescriptor(
-        Document.prototype,
-        'visibilityState'
-    );
 
     const CONFIG = {
         loopMin: 30000,

@@ -1,4 +1,6 @@
 (() => {
+    'use strict';
+
     const API = 'https://sponsor.ajay.app/api/skipSegments/';
     const SKIP_BUFFER = 0.003;
     const END_TIME_SKIP_BUFFER = 0.5;

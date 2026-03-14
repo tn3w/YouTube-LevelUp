@@ -10,6 +10,10 @@
         },
         lastActivity: Date.now(),
         antiTranslate: { videoId: null, audioTrack: null },
+        vote: {
+            attachedLikeButton: null,
+            state: 0,
+        },
     };
 
     try {
@@ -38,6 +42,7 @@
     };
 
     const dislikes = {
+        API_BASE: 'https://returnyoutubedislikeapi.com',
         lastDisplayedCount: null,
 
         getButtons: () => {
@@ -73,6 +78,22 @@
                 return buttons.querySelector('dislike-button-view-model');
             }
             return buttons.children[1];
+        },
+
+        getLikeButton: () => {
+            const buttons = dislikes.getButtons();
+            if (!buttons) return null;
+
+            const firstChild = buttons.children[0];
+            const tag = 'YTD-SEGMENTED-LIKE-DISLIKE-BUTTON-RENDERER';
+            if (firstChild?.tagName === tag) {
+                return document.querySelector('#segmented-like-button') || firstChild.children[0];
+            }
+            const model = 'segmented-like-dislike-button-view-model';
+            if (buttons.querySelector(model)) {
+                return buttons.querySelector('like-button-view-model');
+            }
+            return buttons.children[0];
         },
 
         getTextElement: (button) => {
@@ -134,7 +155,7 @@
             state.current.processing.dislikes = true;
 
             try {
-                const url = 'https://returnyoutubedislikeapi.com/votes?videoId=';
+                const url = `${dislikes.API_BASE}/votes?videoId=`;
                 const res = await fetch(url + id, {
                     signal: AbortSignal.timeout(5000),
                 });
@@ -164,6 +185,172 @@
             }
 
             dislikes.fetch(id);
+        },
+
+        generateUserId: () => {
+            const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' + 'abcdefghijklmnopqrstuvwxyz0123456789';
+            const values = crypto.getRandomValues(new Uint32Array(36));
+            return Array.from(values, (v) => charset[v % charset.length]).join('');
+        },
+
+        getUserId: () => {
+            const stored = localStorage.getItem('ytdb_userId');
+            if (stored) return stored;
+            const userId = dislikes.generateUserId();
+            localStorage.setItem('ytdb_userId', userId);
+            return userId;
+        },
+
+        countLeadingZeroes: (bytes) => {
+            let count = 0;
+            for (const byte of bytes) {
+                if (byte === 0) {
+                    count += 8;
+                    continue;
+                }
+                count += Math.clz32(byte) - 24;
+                break;
+            }
+            return count;
+        },
+
+        solvePuzzle: async (puzzle) => {
+            const challenge = Uint8Array.from(atob(puzzle.challenge), (character) =>
+                character.charCodeAt(0)
+            );
+            const buffer = new ArrayBuffer(20);
+            const byteView = new Uint8Array(buffer);
+            const counterView = new Uint32Array(buffer);
+            const maxIterations = Math.pow(2, puzzle.difficulty) * 3;
+            for (let i = 4; i < 20; i++) {
+                byteView[i] = challenge[i - 4];
+            }
+            for (let i = 0; i < maxIterations; i++) {
+                counterView[0] = i;
+                const hash = await crypto.subtle.digest('SHA-512', buffer);
+                const zeroes = dislikes.countLeadingZeroes(new Uint8Array(hash));
+                if (zeroes < puzzle.difficulty) continue;
+                return btoa(String.fromCharCode(...byteView.slice(0, 4)));
+            }
+            return null;
+        },
+
+        register: async () => {
+            const userId = dislikes.getUserId();
+            const url =
+                `${dislikes.API_BASE}/puzzle/registration` +
+                `?userId=${encodeURIComponent(userId)}`;
+            try {
+                const puzzle = await fetch(url, {
+                    headers: {
+                        Accept: 'application/json',
+                    },
+                }).then((r) => r.json());
+                const solution = await dislikes.solvePuzzle(puzzle);
+                if (!solution) return false;
+                const result = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ solution }),
+                }).then((r) => r.json());
+                if (result === true) {
+                    localStorage.setItem('ytdb_registered', 'true');
+                    return true;
+                }
+            } catch {}
+            return false;
+        },
+
+        ensureRegistered: async () => {
+            const registered = localStorage.getItem('ytdb_registered');
+            if (registered === 'true') return true;
+            return dislikes.register();
+        },
+
+        submitVote: async (videoId, vote, retried = false) => {
+            if (!(await dislikes.ensureRegistered())) {
+                return;
+            }
+            const userId = dislikes.getUserId();
+            try {
+                const response = await fetch(`${dislikes.API_BASE}/interact/vote`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        userId,
+                        videoId,
+                        value: vote,
+                    }),
+                });
+                if (response.status === 401 && !retried) {
+                    localStorage.removeItem('ytdb_registered');
+                    if (await dislikes.register()) {
+                        return dislikes.submitVote(videoId, vote, true);
+                    }
+                    return;
+                }
+                if (!response.ok) return;
+                const puzzle = await response.json();
+                const solution = await dislikes.solvePuzzle(puzzle);
+                if (!solution) return;
+                await fetch(`${dislikes.API_BASE}` + '/interact/confirmVote', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        solution,
+                        userId,
+                        videoId,
+                    }),
+                });
+            } catch {}
+        },
+
+        isButtonPressed: (buttonContainer) => {
+            if (!buttonContainer) return false;
+            const button = buttonContainer.querySelector('button');
+            return button?.getAttribute('aria-pressed') === 'true';
+        },
+
+        detectVoteState: () => {
+            if (dislikes.isButtonPressed(dislikes.getLikeButton())) {
+                return 1;
+            }
+            if (dislikes.isButtonPressed(dislikes.getDislikeButton())) {
+                return -1;
+            }
+            return 0;
+        },
+
+        handleLikeClick: () => {
+            if (!state.current.videoId) return;
+            state.vote.state = state.vote.state === 1 ? 0 : 1;
+            dislikes.submitVote(state.current.videoId, state.vote.state);
+        },
+
+        handleDislikeClick: () => {
+            if (!state.current.videoId) return;
+            state.vote.state = state.vote.state === -1 ? 0 : -1;
+            dislikes.submitVote(state.current.videoId, state.vote.state);
+        },
+
+        attachVoteListeners: () => {
+            const likeButton = dislikes.getLikeButton();
+            if (!likeButton) return;
+            if (state.vote.attachedLikeButton === likeButton) {
+                return;
+            }
+            const dislikeButton = dislikes.getDislikeButton();
+            if (!dislikeButton) return;
+            state.vote.state = dislikes.detectVoteState();
+            likeButton.addEventListener('click', dislikes.handleLikeClick);
+            dislikeButton.addEventListener('click', dislikes.handleDislikeClick);
+            state.vote.attachedLikeButton = likeButton;
         },
     };
 
@@ -906,6 +1093,8 @@
     const onNavigate = () => {
         state.current.videoId = null;
         dislikes.lastDisplayedCount = null;
+        state.vote.attachedLikeButton = null;
+        state.vote.state = 0;
         sponsors.skippedSegments.clear();
         document.querySelectorAll('.skip-segment-marker').forEach((m) => m.remove());
         setTimeout(update, 100);
@@ -931,6 +1120,7 @@
         }
 
         dislikes.update(id);
+        dislikes.attachVoteListeners();
         sponsors.skip();
         antiTranslate.update();
     };
