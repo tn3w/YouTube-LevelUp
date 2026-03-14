@@ -1090,6 +1090,31 @@
         },
     };
 
+    const mobileMetadataFix = {
+        STYLE_ID: 'mobile-metadata-fix-style',
+
+        injectStyles: () => {
+            if (!isMobile()) return;
+            if (document.getElementById(
+                mobileMetadataFix.STYLE_ID
+            )) return;
+
+            const style = document.createElement('style');
+            style.id = mobileMetadataFix.STYLE_ID;
+            style.textContent = `
+                ytm-slim-video-metadata-section-renderer {
+                    position: relative !important;
+                    z-index: 2 !important;
+                }
+            `;
+            document.documentElement.appendChild(style);
+        },
+
+        init: () => {
+            mobileMetadataFix.injectStyles();
+        },
+    };
+
     const onNavigate = () => {
         state.current.videoId = null;
         dislikes.lastDisplayedCount = null;
@@ -1128,6 +1153,7 @@
     continueWatching.init();
     shortsBlocker.init();
     membersBlocker.init();
+    mobileMetadataFix.init();
 
     window.addEventListener('yt-navigate-finish', onNavigate, true);
     setInterval(update, 500);
