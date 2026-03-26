@@ -67,6 +67,16 @@ Transform your YouTube experience with the most comprehensive upgrade extension 
 3. Click "Load Temporary Add-on"
 4. Select manifest.json
 
+## Settings
+
+Click the extension toolbar icon to open the settings popup:
+
+- **Feature toggles** - Enable/disable each feature individually (dislikes, sponsor skip, shorts blocker, members blocker, auto continue, anti-translate, background playback)
+- **SponsorBlock categories** - Choose which segment types to auto-skip: Sponsor, Self Promotion, Exclusive Access, Interaction Reminder, Highlight, Intermission/Intro, Endcards/Credits, Preview/Recap, Tangents/Jokes, Non-Music Sections
+- **Music options** - Restrict non-music section skipping to music.youtube.com only
+
+Automatically adapts to your browser's light/dark theme.
+
 ## Privacy
 
 - No tracking or analytics

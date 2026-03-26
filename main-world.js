@@ -2,6 +2,9 @@
     'use strict';
 
     const originalHiddenDesc = Object.getOwnPropertyDescriptor(Document.prototype, 'hidden');
+    const originalVisDesc = Object.getOwnPropertyDescriptor(Document.prototype, 'visibilityState');
+
+    const isDisabled = () => document.documentElement?.dataset?.ytluBgOff === '1';
 
     const CONFIG = {
         loopMin: 30000,
@@ -111,6 +114,7 @@
     };
 
     const shouldDispatchKeepAlive = () => {
+        if (isDisabled()) return false;
         const realHidden = getRealHidden();
         if (!realHidden) return false;
 
@@ -165,6 +169,9 @@
         configurable: true,
         enumerable: true,
         get() {
+            if (isDisabled()) {
+                return originalHiddenDesc?.get?.call(document) ?? false;
+            }
             return false;
         },
     });
@@ -173,11 +180,15 @@
         configurable: true,
         enumerable: true,
         get() {
+            if (isDisabled()) {
+                return originalVisDesc?.get?.call(document) ?? 'visible';
+            }
             return 'visible';
         },
     });
 
     const onVisChangeCapture = (evt) => {
+        if (isDisabled()) return;
         evt.stopImmediatePropagation();
         evt.preventDefault();
 

@@ -1,11 +1,18 @@
 {
     "manifest_version": 2,
     "name": "YouTube LevelUp",
-    "version": "1.3.6",
+    "version": "1.3.7",
     "description": "Blocks Shorts & members-only, returns dislikes, skips sponsors, anti-translate, auto-continues, background playback",
     "icons": {
         "48": "icons/icon48.png",
         "128": "icons/icon128.png"
+    },
+    "browser_action": {
+        "default_icon": {
+            "48": "icons/icon48.png",
+            "128": "icons/icon128.png"
+        },
+        "default_popup": "popup.html"
     },
     "permissions": [
         "storage",

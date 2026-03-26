@@ -1,5 +1,66 @@
-(() => {
+(async () => {
     'use strict';
+
+    const browserApi = typeof browser !== 'undefined' ? browser : chrome;
+    const storageApi = browserApi.storage.local;
+
+    const SETTING_DEFAULTS = {
+        features: {
+            dislikes: true,
+            sponsors: true,
+            shortsBlocker: true,
+            membersBlocker: true,
+            continueWatching: true,
+            antiTranslate: true,
+            backgroundPlayback: true,
+        },
+        categories: {
+            sponsor: true,
+            selfpromo: true,
+            exclusive_access: false,
+            interaction: false,
+            poi_highlight: false,
+            intro: false,
+            outro: false,
+            preview: false,
+            filler: false,
+            music_offtopic: false,
+        },
+        musicOnlySkip: false,
+    };
+
+    let settings = JSON.parse(JSON.stringify(SETTING_DEFAULTS));
+
+    const mergeSettings = (stored) => {
+        if (!stored) return;
+        for (const [key, val] of Object.entries(stored)) {
+            if (typeof val === 'object' && val !== null && settings[key]) {
+                Object.assign(settings[key], val);
+            } else {
+                settings[key] = val;
+            }
+        }
+    };
+
+    try {
+        const data = await storageApi.get('settings');
+        mergeSettings(data.settings);
+    } catch {}
+
+    const applyBgPlayback = () => {
+        if (!settings.features.backgroundPlayback) {
+            document.documentElement.dataset.ytluBgOff = '1';
+        } else {
+            delete document.documentElement.dataset.ytluBgOff;
+        }
+    };
+    applyBgPlayback();
+
+    browserApi.storage.onChanged.addListener((changes, area) => {
+        if (area !== 'local' || !changes.settings) return;
+        mergeSettings(changes.settings.newValue);
+        applyBgPlayback();
+    });
 
     const state = {
         cache: { dislikes: {}, sponsors: {} },
@@ -371,6 +432,17 @@
                 .slice(0, 4);
         },
 
+        getEnabledCategories: () => {
+            const cats = Object.entries(settings.categories)
+                .filter(([_, v]) => v)
+                .map(([k]) => k);
+            if (settings.musicOnlySkip && !isMusic()) {
+                const idx = cats.indexOf('music_offtopic');
+                if (idx !== -1) cats.splice(idx, 1);
+            }
+            return cats;
+        },
+
         fetch: async (id) => {
             if (sponsors.pendingList[id]) return await sponsors.pendingList[id];
             if (!id) return;
@@ -380,12 +452,17 @@
                 return cached.segments;
             }
 
+            const enabledCats = sponsors.getEnabledCategories();
+            if (!enabledCats.length) return [];
+
             const pendingData = (async () => {
                 try {
                     const hash = await sponsors.hashVideoId(id);
+                    const cats = JSON.stringify(enabledCats);
                     const url =
                         'https://sponsor.ajay.app/api/skipSegments/' +
-                        `${hash}?categories=["sponsor","selfpromo"]&actionTypes=["skip"]`;
+                        `${hash}?categories=${cats}` +
+                        '&actionTypes=["skip"]';
                     const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
 
                     if (res.ok) {
@@ -395,7 +472,7 @@
                             videoData?.segments
                                 ?.filter(
                                     (s) =>
-                                        (s.category === 'sponsor' || s.category === 'selfpromo') &&
+                                        enabledCats.includes(s.category) &&
                                         s.actionType === 'skip' &&
                                         s.segment?.length === 2 &&
                                         s.segment[1] > s.segment[0]
@@ -426,12 +503,15 @@
         },
 
         skip: () => {
+            if (!settings.features.sponsors) return;
             const video = sponsors.getVideo();
             if (!video || !state.current.segments.length) return;
 
+            const enabledCats = sponsors.getEnabledCategories();
             const { currentTime, duration } = video;
 
             for (const segment of state.current.segments) {
+                if (!enabledCats.includes(segment.category)) continue;
                 const [start, end] = segment.segment;
 
                 if (currentTime < start - sponsors.SKIP_BUFFER || currentTime >= end) continue;
@@ -480,16 +560,19 @@
 
             document.querySelectorAll('.skip-segment-marker').forEach((m) => m.remove());
 
+            const enabledCats = sponsors.getEnabledCategories();
             const duration = video.duration;
-            state.current.segments.forEach((segment) => {
-                const [startTime, endTime] = segment.segment;
-                if (endTime <= startTime) return;
+            state.current.segments
+                .filter((s) => enabledCats.includes(s.category))
+                .forEach((segment) => {
+                    const [startTime, endTime] = segment.segment;
+                    if (endTime <= startTime) return;
 
-                const marker = document.createElement('div');
-                marker.className = 'skip-segment-marker';
-                const leftPos = sponsors.timeToPercentage(startTime, duration, progressBar);
-                const rightPos = sponsors.timeToPercentage(endTime, duration, progressBar);
-                marker.style.cssText = `
+                    const marker = document.createElement('div');
+                    marker.className = 'skip-segment-marker';
+                    const leftPos = sponsors.timeToPercentage(startTime, duration, progressBar);
+                    const rightPos = sponsors.timeToPercentage(endTime, duration, progressBar);
+                    marker.style.cssText = `
                     position: absolute;
                     left: ${leftPos}%;
                     width: ${rightPos - leftPos}%;
@@ -499,8 +582,8 @@
                     z-index: 10;
                     pointer-events: none;
                 `;
-                progressBar.appendChild(marker);
-            });
+                    progressBar.appendChild(marker);
+                });
         },
 
         scheduleRender: () => {
@@ -1139,18 +1222,22 @@
         if (isNewVideo) {
             state.current.videoId = id;
             dislikes.lastDisplayedCount = null;
-            sponsors.update(id);
+            if (settings.features.sponsors) sponsors.update(id);
         }
 
-        dislikes.update(id);
-        dislikes.attachVoteListeners();
-        sponsors.skip();
-        antiTranslate.update();
+        if (settings.features.dislikes) {
+            dislikes.update(id);
+            dislikes.attachVoteListeners();
+        }
+        if (settings.features.sponsors) sponsors.skip();
+        if (settings.features.antiTranslate) {
+            antiTranslate.update();
+        }
     };
 
-    continueWatching.init();
-    shortsBlocker.init();
-    membersBlocker.init();
+    if (settings.features.continueWatching) continueWatching.init();
+    if (settings.features.shortsBlocker) shortsBlocker.init();
+    if (settings.features.membersBlocker) membersBlocker.init();
     mobileMetadataFix.init();
 
     window.addEventListener('yt-navigate-finish', onNavigate, true);
