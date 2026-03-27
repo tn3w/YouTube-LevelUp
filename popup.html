@@ -2,6 +2,7 @@
 <html lang="en">
     <head>
         <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="color-scheme" content="light dark" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -51,15 +52,9 @@
             }
             html,
             body {
-                width: 280px;
+                min-width: 280px;
+                width: 100%;
                 overflow: hidden;
-            }
-            @media (min-width: 400px) {
-                html,
-                body {
-                    width: 100vw;
-                    max-width: 420px;
-                }
             }
             body {
                 font-family:
@@ -295,50 +290,6 @@
             }
             .foot a:hover {
                 color: var(--accent);
-            }
-            @media (min-width: 400px) {
-                .scroll {
-                    max-height: none;
-                    padding: 16px 14px 18px;
-                }
-                header img {
-                    width: 32px;
-                    height: 32px;
-                }
-                header h1 {
-                    font-size: 1.25rem;
-                }
-                .gh-link {
-                    width: 24px;
-                    height: 24px;
-                }
-                .name {
-                    font-size: 0.88rem;
-                }
-                .row {
-                    padding: 10px 14px;
-                }
-                .toggle {
-                    width: 40px;
-                    height: 22px;
-                }
-                .track {
-                    border-radius: 11px;
-                }
-                .track::after {
-                    width: 18px;
-                    height: 18px;
-                }
-                .toggle input:checked + .track::after {
-                    transform: translateX(18px);
-                }
-                .group-header {
-                    font-size: 0.76rem;
-                    padding: 10px 14px;
-                }
-                .foot {
-                    font-size: 0.68rem;
-                }
             }
         </style>
     </head>
