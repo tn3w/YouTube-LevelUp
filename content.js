@@ -138,6 +138,7 @@
             if (buttons.querySelector('segmented-like-dislike-button-view-model')) {
                 return buttons.querySelector('dislike-button-view-model');
             }
+            if (isMobile()) return null;
             return buttons.children[1];
         },
 
@@ -154,6 +155,7 @@
             if (buttons.querySelector(model)) {
                 return buttons.querySelector('like-button-view-model');
             }
+            if (isMobile()) return null;
             return buttons.children[0];
         },
 
