@@ -69,9 +69,6 @@
         if (buttons.querySelector('segmented-like-dislike-button-view-model')) {
             return buttons.querySelector('dislike-button-view-model');
         }
-        if (isMobile()) {
-            return buttons.children[0]?.querySelector('dislike-button-view-model') || null;
-        }
         return buttons.children[1];
     }
 
@@ -89,10 +86,7 @@
         if (buttons.querySelector(model)) {
             return buttons.querySelector('like-button-view-model');
         }
-        if (isMobile()) {
-            return buttons.children[0]?.querySelector('like-button-view-model') || null;
-        }
-        return buttons.children[0];
+        return buttons.querySelector('like-button-view-model') || buttons.children[0];
     }
 
     function getTextElement(dislikeButton) {
@@ -380,8 +374,12 @@
         }
         attachVoteListeners();
         if (cache[videoId]) {
-            if (lastDisplayedCount !== cache[videoId]) {
-                displayDislikeCount(cache[videoId]);
+            const cached = cache[videoId];
+            if (
+                lastDisplayedCount !== cached ||
+                !getTextElement(getDislikeButton())
+            ) {
+                displayDislikeCount(cached);
             }
             return;
         }
