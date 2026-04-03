@@ -1021,6 +1021,7 @@
             ytm-rich-section-renderer:has([href^="/shorts/"]),
             grid-shelf-view-model:has([href^="/shorts/"]),
             ytd-rich-grid-group:has([href^="/shorts/"]),
+            [href^="/shorts/"],
             ytd-reel-item-renderer,
             ytm-reel-item-renderer,
             ytm-shorts-lockup-view-model,
