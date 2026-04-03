@@ -56,6 +56,10 @@
                 width: 100%;
                 overflow: hidden;
             }
+            html[data-device='mobile'],
+            html[data-device='mobile'] body {
+                height: 100dvh;
+            }
             body {
                 font-family:
                     'Manrope',
@@ -129,6 +133,10 @@
                 padding: 12px 10px 14px;
                 scrollbar-width: thin;
                 scrollbar-color: var(--border) transparent;
+            }
+            html[data-device='mobile'] .scroll {
+                height: 100dvh;
+                max-height: 100dvh;
             }
             .scroll::-webkit-scrollbar {
                 width: 4px;

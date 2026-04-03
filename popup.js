@@ -2,6 +2,10 @@
 
 const api = typeof browser !== 'undefined' ? browser : chrome;
 const store = api.storage.local;
+const isMobilePopup =
+    navigator.userAgentData?.mobile || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+
+document.documentElement.dataset.device = isMobilePopup ? 'mobile' : 'desktop';
 
 const luminance = (color) => {
     if (!color) return 200;
