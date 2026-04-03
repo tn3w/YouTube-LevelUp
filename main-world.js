@@ -189,14 +189,17 @@
 
     const onVisChangeCapture = (evt) => {
         if (isDisabled()) return;
-        evt.stopImmediatePropagation();
-        evt.preventDefault();
 
         const nowHidden = getRealHidden();
         if (lastRealHidden === null) lastRealHidden = nowHidden;
 
-        if (nowHidden && lastRealHidden === false) {
-            schedulePrePauseKick();
+        if (nowHidden) {
+            evt.stopImmediatePropagation();
+            evt.preventDefault();
+
+            if (lastRealHidden === false) {
+                schedulePrePauseKick();
+            }
         }
         lastRealHidden = nowHidden;
     };
