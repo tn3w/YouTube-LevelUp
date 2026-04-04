@@ -56,8 +56,7 @@
             badge.closest('yt-lockup-view-model') ||
             badge.closest('ytd-rich-item-renderer') ||
             badge.closest('ytd-rich-grid-row') ||
-            badge.closest(MEDIA_SELECTOR) ||
-            badge.closest('#contents > *')
+            badge.closest(MEDIA_SELECTOR)
         );
     };
 
@@ -90,8 +89,7 @@
             ytd-compact-video-renderer:has(.badge-style-type-members-only),
             ytd-grid-video-renderer:has(.badge-style-type-members-only),
             yt-lockup-view-model:has(.badge-style-type-members-only),
-            ytd-reel-item-renderer:has(.badge-style-type-members-only),
-            yt-lockup-view-model:has(yt-badge-view-model .yt-badge-shape__text) {
+            ytd-reel-item-renderer:has(.badge-style-type-members-only) {
                 display: none !important;
             }
         `;
