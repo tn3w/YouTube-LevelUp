@@ -26,29 +26,45 @@
         ','
     );
 
-    const MEMBERS_PATTERNS = [
-        /members\s*only/i,
-        /members\s*first/i,
-        /for\s+members/i,
-        /available\s+to\s+members/i,
+    const MEMBERS_KEYWORDS = [
+        'member',
+        'mitglied',
+        'miembro',
+        'membre',
+        'membri',
+        'membro',
+        'membru',
+        'leden',
+        'człon',
+        'clen',
+        'участник',
+        'メンバー',
+        '会員',
+        '会员',
+        '멤버',
+        '회원',
+        'uye',
+        'anggota',
+        'medlem',
+        'jasen',
+        'thanh vien',
+        'สมาชิก',
+        'सदस्य',
+        'عضو',
+        'اعضاء',
+        'أعضاء',
     ];
 
+    const normalize = (text) =>
+        (text || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+
     const isMembersBadge = (node) => {
-        if (node.closest?.('yt-badge-view-model')) {
-            const text = (node.textContent || '').trim();
-            if (text && MEMBERS_PATTERNS.some((pattern) => pattern.test(text))) {
-                return true;
-            }
-        }
-
-        const text = (node.textContent || '').trim();
-        const label = node.getAttribute?.('aria-label') || '';
-
         if (node.classList?.contains('badge-style-type-members-only')) return true;
-        if (label && MEMBERS_PATTERNS.some((pattern) => pattern.test(label))) return true;
-        if (text && MEMBERS_PATTERNS.some((pattern) => pattern.test(text))) return true;
 
-        return false;
+        const text = normalize(node.textContent);
+        const label = normalize(node.getAttribute?.('aria-label'));
+
+        return MEMBERS_KEYWORDS.some((word) => text.includes(word) || label.includes(word));
     };
 
     const findWrapper = (badge) => {

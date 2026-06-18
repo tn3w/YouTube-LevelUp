@@ -323,21 +323,45 @@
         } catch {}
     };
 
+    const SYNC_KEYWORDS = [
+        'automati',
+        'synchron',
+        'sincroniz',
+        'auto-generated',
+        'autogener',
+        '自動',
+        '自动',
+        '자동',
+        '동기화',
+        'автомати',
+        'синхрон',
+        'स्वचालित',
+        'تلقائي',
+        'otomatis',
+        'otomatik',
+    ];
+
+    const matchesSync = (text) => !!text && SYNC_KEYWORDS.some((word) => text.includes(word));
+
     const removeSyncLabel = () => {
         const labels = document.querySelectorAll(
             '.ytp-caption-window-rollup, ' + '.caption-window .ytp-caption-segment[style*="italic"]'
         );
         labels.forEach((label) => {
-            const text = label.textContent?.trim().toLowerCase();
-            if (
-                text &&
-                (text.includes('automatically') ||
-                    text.includes('synchronized') ||
-                    text.includes('auto-generated') ||
-                    text.includes('自動'))
-            ) {
-                label.remove();
-            }
+            if (matchesSync(normalize(label.textContent))) label.remove();
+        });
+    };
+
+    const removeSyncBadges = () => {
+        const badges = document.querySelectorAll(
+            'ytd-badge-supported-renderer, yt-badge-view-model, ' +
+                '.badge-shape-wiz__text, .yt-badge-shape__text'
+        );
+        badges.forEach((badge) => {
+            if (!matchesSync(normalize(badge.textContent))) return;
+            const chip =
+                badge.closest('ytd-badge-supported-renderer, yt-badge-view-model') || badge;
+            chip.remove();
         });
     };
 
@@ -349,6 +373,7 @@
             untranslateSubtitles();
             removeSyncLabel();
         }
+        removeSyncBadges();
         untranslateVideoList();
     };
 

@@ -978,22 +978,51 @@
             } catch {}
         },
 
+        SYNC_KEYWORDS: [
+            'automati',
+            'synchron',
+            'sincroniz',
+            'auto-generated',
+            'autogener',
+            '自動',
+            '自动',
+            '자동',
+            '동기화',
+            'автомати',
+            'синхрон',
+            'स्वचालित',
+            'تلقائي',
+            'otomatis',
+            'otomatik',
+        ],
+
+        matchesSync: (text) =>
+            !!text && antiTranslate.SYNC_KEYWORDS.some((word) => text.includes(word)),
+
         removeSyncLabel: () => {
             const labels = document.querySelectorAll(
                 '.ytp-caption-window-rollup, ' +
                     '.caption-window .ytp-caption-segment[style*="italic"]'
             );
             labels.forEach((label) => {
-                const text = label.textContent?.trim().toLowerCase();
-                if (
-                    text &&
-                    (text.includes('automatically') ||
-                        text.includes('synchronized') ||
-                        text.includes('auto-generated') ||
-                        text.includes('自動'))
-                ) {
+                if (antiTranslate.matchesSync(antiTranslate.normalize(label.textContent))) {
                     label.remove();
                 }
+            });
+        },
+
+        removeSyncBadges: () => {
+            const badges = document.querySelectorAll(
+                'ytd-badge-supported-renderer, yt-badge-view-model, ' +
+                    '.badge-shape-wiz__text, .yt-badge-shape__text'
+            );
+            badges.forEach((badge) => {
+                if (!antiTranslate.matchesSync(antiTranslate.normalize(badge.textContent))) {
+                    return;
+                }
+                const chip =
+                    badge.closest('ytd-badge-supported-renderer, yt-badge-view-model') || badge;
+                chip.remove();
             });
         },
 
@@ -1005,6 +1034,7 @@
                 antiTranslate.untranslateSubtitles();
                 antiTranslate.removeSyncLabel();
             }
+            antiTranslate.removeSyncBadges();
             antiTranslate.untranslateVideoList();
         },
     };
@@ -1073,27 +1103,44 @@
             'ytd-reel-item-renderer',
         ].join(','),
 
-        MEMBERS_PATTERNS: [
-            /members\s*only/i,
-            /members\s*first/i,
-            /for\s+members/i,
-            /available\s+to\s+members/i,
+        MEMBERS_KEYWORDS: [
+            'member',
+            'mitglied',
+            'miembro',
+            'membre',
+            'membri',
+            'membro',
+            'membru',
+            'leden',
+            'człon',
+            'clen',
+            'участник',
+            'メンバー',
+            '会員',
+            '会员',
+            '멤버',
+            '회원',
+            'uye',
+            'anggota',
+            'medlem',
+            'jasen',
+            'thanh vien',
+            'สมาชิก',
+            'सदस्य',
+            'عضو',
+            'اعضاء',
+            'أعضاء',
         ],
 
         isMembersBadge: (node) => {
-            if (node.closest?.('yt-badge-view-model')) {
-                const text = (node.textContent || '').trim();
-                if (membersBlocker.MEMBERS_PATTERNS.some((p) => p.test(text))) return true;
-            }
-
-            const text = (node.textContent || '').trim();
-            const label = node.getAttribute?.('aria-label') || '';
-
             if (node.classList?.contains('badge-style-type-members-only')) return true;
-            if (membersBlocker.MEMBERS_PATTERNS.some((p) => p.test(label))) return true;
-            if (membersBlocker.MEMBERS_PATTERNS.some((p) => p.test(text))) return true;
 
-            return false;
+            const text = antiTranslate.normalize(node.textContent);
+            const label = antiTranslate.normalize(node.getAttribute?.('aria-label'));
+
+            return membersBlocker.MEMBERS_KEYWORDS.some(
+                (word) => text.includes(word) || label.includes(word)
+            );
         },
 
         findWrapper: (badge) => {

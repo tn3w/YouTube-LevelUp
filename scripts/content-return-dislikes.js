@@ -375,10 +375,7 @@
         attachVoteListeners();
         if (cache[videoId]) {
             const cached = cache[videoId];
-            if (
-                lastDisplayedCount !== cached ||
-                !getTextElement(getDislikeButton())
-            ) {
+            if (lastDisplayedCount !== cached || !getTextElement(getDislikeButton())) {
                 displayDislikeCount(cached);
             }
             return;

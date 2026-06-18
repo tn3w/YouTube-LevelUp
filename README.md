@@ -18,6 +18,7 @@ Transform your YouTube experience with the most comprehensive upgrade extension 
 
 - Hides members-only videos from feeds and recommendations
 - Detects both legacy and new YouTube badge layouts
+- Matches member badges across all interface languages
 - Removes clutter from channels you're not subscribed to
 
 **Dislike Counter Restoration**
@@ -42,6 +43,7 @@ Transform your YouTube experience with the most comprehensive upgrade extension 
 
 - Restores original audio tracks on dubbed videos
 - Shows original video descriptions instead of auto-translated text
+- Removes "auto-synchronized" labels and badges in any language
 - Works on desktop and mobile YouTube
 
 **Background Playback**
